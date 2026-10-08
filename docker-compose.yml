@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trackly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trackly_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-trackly}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - trackly_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trackly -d trackly"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  trackly_data:
