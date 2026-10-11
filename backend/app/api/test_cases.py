@@ -1,19 +1,40 @@
 from fastapi import APIRouter, Response
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.api.deps import DB, Actor
 from app.models import TestCase, Project
 from app.schemas.test_case import TestCaseIn, TestCaseOut, TestStatusIn
-from app.services.access import visible_projects, child_access, issue_access
+from app.services.access import (
+    visible_projects,
+    child_access,
+    issue_access,
+    project_access,
+)
 from app.services import test_cases
 
 router = APIRouter(prefix="/test-cases", tags=["Test cases"])
 
 
 @router.get("", response_model=list[TestCaseOut])
-def index(db: DB, actor: Actor, issue_id: int | None = None):
-    query = select(TestCase).where(
-        TestCase.project_id.in_(visible_projects(actor).with_only_columns(Project.id))
+def index(
+    db: DB, actor: Actor, issue_id: int | None = None, project_id: int | None = None
+):
+    query = (
+        select(TestCase)
+        .where(
+            TestCase.project_id.in_(
+                visible_projects(actor).with_only_columns(Project.id)
+            )
+        )
+        .options(
+            selectinload(TestCase.steps),
+            selectinload(TestCase.criteria),
+            selectinload(TestCase.executions),
+        )
     )
+    if project_id:
+        project_access(db, project_id, actor)
+        query = query.where(TestCase.project_id == project_id)
     if issue_id:
         issue_access(db, issue_id, actor)
         query = query.where(TestCase.issue_id == issue_id)

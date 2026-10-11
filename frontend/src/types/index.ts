@@ -49,6 +49,7 @@ export interface Issue {
   updated_at: string;
   related_issue_id: number | null;
   related_test_case_id: number | null;
+  related_execution_id: number | null;
   assignee: User | null;
   reporter: User;
 }
@@ -69,11 +70,32 @@ export interface Criterion {
   order_index: number;
   completed: boolean;
 }
+export const testTypes = [
+  'FUNCTIONAL',
+  'REGRESSION',
+  'INTEGRATION',
+  'UI',
+  'API',
+] as const;
+export const testStatuses = [
+  'NOT_RUN',
+  'PASSED',
+  'FAILED',
+  'BLOCKED',
+  'SKIPPED',
+] as const;
+export const runStatuses = ['PASSED', 'FAILED', 'BLOCKED', 'SKIPPED'] as const;
+export const stepStatuses = ['NOT_RUN', 'PASSED', 'FAILED', 'BLOCKED'] as const;
+export type TestStatus = (typeof testStatuses)[number];
+export type RunStatus = (typeof runStatuses)[number];
+export type StepStatus = (typeof stepStatuses)[number];
 export interface TestStep {
   id?: number;
   step_number: number;
   action: string;
+  test_data: string;
   expected_result: string;
+  shared_step_id: number | null;
 }
 export interface TestCase {
   id: number;
@@ -86,10 +108,96 @@ export interface TestCase {
   preconditions: string;
   expected_result: string;
   test_data: string;
-  status: string;
+  status: TestStatus;
   steps: TestStep[];
+  criterion_ids: number[];
+  last_executed_on: string | null;
+  execution_count: number;
   created_at: string;
   updated_at: string;
+}
+export interface SharedStep {
+  id: number;
+  project_id: number;
+  title: string;
+  action: string;
+  test_data: string;
+  expected_result: string;
+  usage_count: number;
+  updated_at: string;
+}
+export interface ExecutionStep {
+  id: number;
+  step_number: number;
+  action: string;
+  test_data: string;
+  expected_result: string;
+  actual_result: string;
+  status: StepStatus;
+}
+export interface Execution {
+  id: number;
+  project_id: number;
+  test_case_id: number;
+  test_case_key: string;
+  test_case_title: string;
+  issue_id: number;
+  sprint_id: number | null;
+  status: RunStatus;
+  actual_result: string;
+  environment: string;
+  tester_id: number;
+  tester: User;
+  executed_on: string;
+  created_at: string;
+  steps: ExecutionStep[];
+}
+type TraceUser = Pick<User, 'id' | 'first_name' | 'last_name'>;
+export interface TraceIssue {
+  id: number;
+  issue_key: string;
+  summary: string;
+  status: Issue['status'];
+  priority: Issue['priority'];
+  related_test_case_id: number | null;
+  related_execution_id: number | null;
+}
+export interface TraceTest {
+  id: number;
+  test_case_key: string;
+  title: string;
+  status: TestStatus;
+  criterion_ids: number[];
+  last_execution: {
+    id: number;
+    status: RunStatus;
+    executed_on: string;
+    tester: TraceUser;
+  } | null;
+}
+export interface TraceStory {
+  id: number;
+  issue_key: string;
+  summary: string;
+  status: Issue['status'];
+  priority: Issue['priority'];
+  story_points: number;
+  epic_id: number | null;
+  sprint_id: number | null;
+  assignee: TraceUser | null;
+  criteria: {
+    id: number;
+    description: string;
+    completed: boolean;
+    test_case_ids: number[];
+  }[];
+  subtasks: TraceIssue[];
+  test_cases: TraceTest[];
+  bugs: TraceIssue[];
+}
+export interface Traceability {
+  epics: TraceIssue[];
+  stories: TraceStory[];
 }
 export interface Comment {
   id: number;

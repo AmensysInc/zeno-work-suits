@@ -94,6 +94,7 @@ export default function CreateIssueModal({
                     issue_type,
                     related_issue_id: initial.related_issue_id,
                     related_test_case_id: initial.related_test_case_id,
+                    related_execution_id: initial.related_execution_id,
                   }
                 : {}),
               labels: data.labels
@@ -113,6 +114,8 @@ export default function CreateIssueModal({
             {issues.data?.find((i) => i.id === initial.related_issue_id)
               ?.issue_key ?? initial.related_issue_id}
             {' · '}Test case #{initial.related_test_case_id}
+            {initial.related_execution_id &&
+              ` · Test run #${initial.related_execution_id}`}
           </p>
         )}
         <div className="form-grid">

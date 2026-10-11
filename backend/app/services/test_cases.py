@@ -1,8 +1,51 @@
 from fastapi import HTTPException
-from sqlalchemy import update
-from app.models import TestCase, TestCaseStep, Project
+from sqlalchemy import select, update
+from app.models import (
+    TestCase,
+    TestCaseStep,
+    Project,
+    SharedStep,
+    AcceptanceCriterion,
+)
 from app.services.access import project_access, issue_access, child_access
 from app.services.activity import record
+
+
+def build_steps(db, project_id, steps):
+    """Turns submitted steps into rows; reusable steps copy their library text."""
+    rows = []
+    for number, step in enumerate(steps, 1):
+        shared = None
+        if step.shared_step_id:
+            shared = db.get(SharedStep, step.shared_step_id)
+            if not shared or shared.project_id != project_id:
+                raise HTTPException(422, "Reusable steps must belong to this project")
+        source = shared or step
+        if not source.action.strip():
+            raise HTTPException(422, f"Step {number} needs an action")
+        rows.append(
+            TestCaseStep(
+                step_number=number,
+                action=source.action,
+                test_data=source.test_data,
+                expected_result=source.expected_result,
+                shared_step_id=shared.id if shared else None,
+            )
+        )
+    return rows
+
+
+def covered_criteria(db, story, ids):
+    if not ids:
+        return []
+    criteria = db.scalars(
+        select(AcceptanceCriterion).where(AcceptanceCriterion.id.in_(ids))
+    ).all()
+    if len(criteria) != len(set(ids)) or any(c.issue_id != story.id for c in criteria):
+        raise HTTPException(
+            422, "Covered acceptance criteria must belong to the linked story"
+        )
+    return list(criteria)
 
 
 def save(db, actor, data, id=None):
@@ -12,11 +55,15 @@ def save(db, actor, data, id=None):
             422, "Test cases must link to a user story in the same project"
         )
     project = project_access(db, data.project_id, actor)
-    values = data.model_dump(exclude={"steps"})
+    values = data.model_dump(exclude={"steps", "criterion_ids"})
+    steps = build_steps(db, project.id, data.steps)
+    criteria = covered_criteria(db, story, data.criterion_ids)
     if id:
         item = child_access(db, TestCase, id, actor)
         if item.project_id != data.project_id or item.issue_id != data.issue_id:
             raise HTTPException(422, "A saved test case cannot change its linked story")
+        # The result comes from test runs, not from the editor.
+        values.pop("status")
         for k, v in values.items():
             setattr(item, k, v)
         item.steps.clear()
@@ -30,10 +77,8 @@ def save(db, actor, data, id=None):
         )
         item = TestCase(**values, test_case_key=f"TC-{counter:03}", created_by=actor.id)
         db.add(item)
-    item.steps = [
-        TestCaseStep(step_number=n, action=s.action, expected_result=s.expected_result)
-        for n, s in enumerate(data.steps, 1)
-    ]
+    item.steps = steps
+    item.criteria = criteria
     record(
         db,
         actor,

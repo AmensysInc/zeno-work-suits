@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy import select, update
-from app.models import Issue, Project, Sprint, TestCase
+from app.models import Issue, Project, Sprint, TestCase, TestExecution
 from app.services.access import project_access, issue_access
 from app.services.activity import record
 
@@ -57,6 +57,14 @@ def validate_links(db, project, values, current=None):
             or tc.issue_id != values.get("related_issue_id")
         ):
             raise HTTPException(422, "Bug test and story links must match")
+    if values.get("related_execution_id"):
+        run = db.get(TestExecution, values["related_execution_id"])
+        if (
+            not run
+            or run.project_id != project.id
+            or run.test_case_id != values.get("related_test_case_id")
+        ):
+            raise HTTPException(422, "Bug test run and test case links must match")
     start = values.get("start_date", getattr(current, "start_date", None))
     due = values.get("due_date", getattr(current, "due_date", None))
     if start and due and due < start:

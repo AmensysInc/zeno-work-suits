@@ -1,4 +1,11 @@
-import { useState, createContext, useContext, lazy, Suspense } from 'react';
+import {
+  useState,
+  useEffect,
+  createContext,
+  useContext,
+  lazy,
+  Suspense,
+} from 'react';
 import {
   Link,
   NavLink,
@@ -15,6 +22,16 @@ const CreateContext = createContext<(initial?: Partial<Issue>) => void>(
   () => {},
 );
 export const useCreateIssue = () => useContext(CreateContext);
+const ProjectContext = createContext<number | undefined>(undefined);
+/** The project in the URL, else the last one visited, else the first one. */
+export const useCurrentProject = () => useContext(ProjectContext);
+const remembered = () => {
+  try {
+    return Number(localStorage.getItem('trackly_project')) || undefined;
+  } catch {
+    return undefined;
+  }
+};
 export default function AppShell() {
   const projects = useProjects();
   const me = useMe();
@@ -25,26 +42,64 @@ export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState('');
   const [profile, setProfile] = useState(false);
+  const [lastProject, setLastProject] = useState(remembered);
   const match = location.pathname.match(/projects\/(\d+)/);
-  const projectId = match ? Number(match[1]) : projects.data?.[0]?.id;
-  const links = [
-    ['Dashboard', '/dashboard'],
-    ['Projects', '/projects'],
-    ['Backlog', projectId ? `/projects/${projectId}/backlog` : '/projects'],
-    ['Sprints', projectId ? `/projects/${projectId}/sprints` : '/projects'],
-    ['Board', projectId ? `/projects/${projectId}/board` : '/projects'],
-    ['My Issues', '/my-issues'],
-    ['Test Cases', '/test-cases'],
+  const fromUrl = match
+    ? Number(match[1])
+    : Number(new URLSearchParams(location.search).get('project')) || undefined;
+  useEffect(() => {
+    if (!fromUrl) return;
+    setLastProject(fromUrl);
+    try {
+      localStorage.setItem('trackly_project', String(fromUrl));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [fromUrl]);
+  const projectId =
+    [fromUrl, lastProject].find((id) =>
+      projects.data?.some((p) => p.id === id),
+    ) ?? projects.data?.[0]?.id;
+  const inProject = (page: string) =>
+    projectId ? `/projects/${projectId}/${page}` : '/projects';
+  const sections: [string, [string, string][]][] = [
+    [
+      '',
+      [
+        ['Dashboard', '/dashboard'],
+        ['Projects', '/projects'],
+        ['Backlog', inProject('backlog')],
+        ['Sprints', inProject('sprints')],
+        ['Board', inProject('board')],
+        ['My Issues', '/my-issues'],
+      ],
+    ],
+    [
+      'QUALITY',
+      [
+        ['QA Dashboard', inProject('quality')],
+        [
+          'Test Repository',
+          projectId ? `/test-cases?project=${projectId}` : '/test-cases',
+        ],
+        ['Test Runs', inProject('test-runs')],
+        ['Bugs', inProject('bugs')],
+        ['Traceability', inProject('traceability')],
+      ],
+    ],
+    ['', [['Voice Agent', '/voice-agent']]],
   ];
+  const links = sections.flatMap(([, items]) => items);
+  const isCurrent = (url: string) => url.split('?')[0] === location.pathname;
   const title = location.pathname.includes('/issues/')
     ? 'Issue details'
     : location.pathname.startsWith('/test-cases/')
       ? location.pathname.endsWith('/new')
         ? 'Add Test Case'
         : 'Test case details'
-      : (links.find(([, url]) => url === location.pathname)?.[0] ??
-        'Project workspace');
+      : (links.find(([, url]) => isCurrent(url))?.[0] ?? 'Project workspace');
   return (
+    <ProjectContext.Provider value={projectId}>
     <CreateContext.Provider value={(initial) => setCreate(initial ?? {})}>
       <div className={`app ${collapsed ? 'collapsed' : ''}`}>
         <aside className="sidebar">
@@ -56,27 +111,32 @@ export default function AppShell() {
             <span className="logo" />
             <span>Zeno Work Suite</span>
           </Link>
-          <nav>
-            {links.map(([name, url]) => (
-              <NavLink
-                key={name}
-                aria-label={name}
-                title={name}
-                onClick={() => { if (window.innerWidth <= 900) setCollapsed(false); }}
-                to={url}
-                end
-                className={({ isActive }) =>
-                  isActive ? 'nav-link active' : 'nav-link'
-                }
-              >
-                <img
-                  alt=""
-                  src={`/assets/${location.pathname === url ? 'imgEllipse' : 'imgEllipse1'}.svg`}
-                />
-                <span>{name}</span>
-              </NavLink>
-            ))}
-          </nav>
+          {sections.map(([heading, items], index) => (
+            <nav key={index} aria-label={heading || undefined}>
+              {heading && <small className="nav-heading">{heading}</small>}
+              {items.map(([name, url]) => (
+                <NavLink
+                  key={name}
+                  aria-label={name}
+                  title={name}
+                  onClick={() => {
+                    if (window.innerWidth <= 900) setCollapsed(false);
+                  }}
+                  to={url}
+                  end
+                  className={({ isActive }) =>
+                    isActive ? 'nav-link active' : 'nav-link'
+                  }
+                >
+                  <img
+                    alt=""
+                    src={`/assets/${isCurrent(url) ? 'imgEllipse' : 'imgEllipse1'}.svg`}
+                  />
+                  <span>{name}</span>
+                </NavLink>
+              ))}
+            </nav>
+          ))}
           <div className="sidebar-projects">
             <small>RECENT PROJECTS</small>
             {projects.data?.slice(0, 5).map((p) => (
@@ -169,5 +229,6 @@ export default function AppShell() {
         )}
       </div>
     </CreateContext.Provider>
+    </ProjectContext.Provider>
   );
 }

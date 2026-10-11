@@ -21,6 +21,7 @@ class IssueIn(BaseModel):
     sprint_id: int | None = None
     related_issue_id: int | None = None
     related_test_case_id: int | None = None
+    related_execution_id: int | None = None
     story_points: int = Field(default=0, ge=0, le=1000)
     order_index: float = 0
     labels: list[str] = Field(default_factory=list, max_length=30)

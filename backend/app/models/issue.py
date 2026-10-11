@@ -39,6 +39,14 @@ class Issue(Timestamps, Base):
             name="fk_issue_related_test",
         )
     )
+    related_execution_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "test_executions.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_issue_related_execution",
+        )
+    )
     story_points: Mapped[int] = mapped_column(default=0)
     order_index: Mapped[float] = mapped_column(default=0)
     labels: Mapped[list] = mapped_column(JSON, default=list)

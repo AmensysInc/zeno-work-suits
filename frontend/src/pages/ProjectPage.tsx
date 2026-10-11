@@ -37,21 +37,37 @@ export default function ProjectPage() {
         )}
       </PageHeader>
       <div className="tabs">
-        {['Overview', 'Backlog', 'Sprints', 'Board', 'Issues', 'Members'].map(
-          (t) =>
-            ['Backlog', 'Sprints', 'Board'].includes(t) ? (
-              <Link key={t} to={`/projects/${p.id}/${t.toLowerCase()}`}>
-                {t}
-              </Link>
-            ) : (
-              <button
-                key={t}
-                className={tab === t ? 'selected' : ''}
-                onClick={() => setTab(t)}
-              >
-                {t}
-              </button>
-            ),
+        {[
+          'Overview',
+          'Backlog',
+          'Sprints',
+          'Board',
+          'Quality',
+          'Bugs',
+          'Traceability',
+          'Issues',
+          'Members',
+        ].map((t) =>
+          [
+            'Backlog',
+            'Sprints',
+            'Board',
+            'Quality',
+            'Bugs',
+            'Traceability',
+          ].includes(t) ? (
+            <Link key={t} to={`/projects/${p.id}/${t.toLowerCase()}`}>
+              {t}
+            </Link>
+          ) : (
+            <button
+              key={t}
+              className={tab === t ? 'selected' : ''}
+              onClick={() => setTab(t)}
+            >
+              {t}
+            </button>
+          ),
         )}
       </div>
       {tab === 'Members' ? (

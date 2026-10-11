@@ -196,8 +196,21 @@ export default function IssueDetailsPage() {
           )}
           {issue.related_test_case_id && (
             <p>
-              <Link to={`/test-cases/${issue.related_test_case_id}`}>
-                View linked test →
+              <Link
+                to={`/test-cases/${issue.related_test_case_id}${issue.related_execution_id ? `#run-${issue.related_execution_id}` : ''}`}
+              >
+                {issue.related_execution_id
+                  ? 'View failed test run →'
+                  : 'View linked test →'}
+              </Link>
+            </p>
+          )}
+          {issue.issue_type === 'STORY' && (
+            <p>
+              <Link
+                to={`/projects/${issue.project_id}/traceability?story=${issue.id}`}
+              >
+                View traceability →
               </Link>
             </p>
           )}
