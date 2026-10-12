@@ -1,3 +1,4 @@
+from tests.conftest import create_user
 from datetime import date
 
 
@@ -256,16 +257,7 @@ def test_qa_data_is_private_to_members(client, auth):
         headers=auth,
         json={"test_case_id": tc["id"], "status": "PASSED"},
     ).json()
-    other = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": "Eve",
-            "last_name": "Out",
-            "email": "eve@example.com",
-            "password": "Password123!",
-        },
-    ).json()
-    eve = {"Authorization": "Bearer " + other["access_token"]}
+    eve = create_user(client, auth, "Eve", "Out", "eve@example.com")
     assert client.get(f"/api/test-executions/{run['id']}", headers=eve).status_code == 404
     assert client.get("/api/test-executions", headers=eve).json() == []
     assert (

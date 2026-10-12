@@ -47,6 +47,10 @@ export default function AppShell() {
   const fromUrl = match
     ? Number(match[1])
     : Number(new URLSearchParams(location.search).get('project')) || undefined;
+  // A temporary password from an admin must be replaced before using the app.
+  useEffect(() => {
+    if (me.data?.must_change_password) nav('/change-password', { replace: true });
+  }, [me.data?.must_change_password, nav]);
   useEffect(() => {
     if (!fromUrl) return;
     setLastProject(fromUrl);
@@ -88,6 +92,9 @@ export default function AppShell() {
       ],
     ],
     ['', [['Voice Agent', '/voice-agent']]],
+    ...(me.data?.is_admin
+      ? ([['ADMIN', [['Users', '/admin/users']]]] as [string, [string, string][]][])
+      : []),
   ];
   const links = sections.flatMap(([, items]) => items);
   const isCurrent = (url: string) => url.split('?')[0] === location.pathname;
@@ -200,6 +207,15 @@ export default function AppShell() {
                       {me.data?.first_name} {me.data?.last_name}
                     </strong>
                     <p>{me.data?.email}</p>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setProfile(false);
+                        nav('/change-password');
+                      }}
+                    >
+                      Change password
+                    </Button>
                     <Button
                       variant="ghost"
                       onClick={() => {

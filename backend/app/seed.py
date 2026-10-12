@@ -189,6 +189,7 @@ def seed():
                 last_name=last,
                 email=email,
                 password_hash=hash_password("Trackly123!"),
+                is_admin=email == "alex@trackly.demo",
             )
             for first, last, email in [
                 ("Alex", "Rivera", "alex@trackly.demo"),

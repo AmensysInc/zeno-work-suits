@@ -4,6 +4,9 @@ from app.models import Project, Issue, User
 
 
 def visible_projects(actor):
+    # Administrators manage the whole application, so they see every project.
+    if actor.is_admin:
+        return select(Project)
     return select(Project).where(
         or_(Project.owner_id == actor.id, Project.members.any(User.id == actor.id))
     )
@@ -16,7 +19,7 @@ def project_access(db, project_id, actor, owner=False, lock=False):
     project = db.scalar(query)
     if not project:
         raise HTTPException(404, "Project not found")
-    if owner and project.owner_id != actor.id:
+    if owner and project.owner_id != actor.id and not actor.is_admin:
         raise HTTPException(403, "Only the project owner can do this")
     return project
 

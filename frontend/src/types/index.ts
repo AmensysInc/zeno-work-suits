@@ -4,6 +4,20 @@ export interface User {
   last_name: string;
   email: string;
   avatar_url: string | null;
+  is_admin?: boolean;
+  must_change_password?: boolean;
+}
+export interface AdminUser extends User {
+  is_admin: boolean;
+  is_active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+export interface IssuedLogin {
+  user: AdminUser;
+  temporary_password: string;
+  email_sent: boolean;
 }
 export interface Project {
   id: number;

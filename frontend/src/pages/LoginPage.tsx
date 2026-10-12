@@ -9,11 +9,9 @@ import { Field } from '../components/ui/shared';
 const schema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(72),
-  first_name: z.string().optional(),
-  last_name: z.string().optional(),
 });
+// Accounts are created by an administrator, so there is no sign-up here.
 export default function LoginPage() {
-  const [registering, setRegistering] = useState(false);
   const [error, setError] = useState('');
   const nav = useNavigate();
   const {
@@ -28,40 +26,28 @@ export default function LoginPage() {
           <span className="logo" />
           Zeno Work Suite
         </div>
-        <h1>{registering ? 'Create your account' : 'Welcome back'}</h1>
+        <h1>Welcome back</h1>
         <p>Keep your team’s work moving forward.</p>
         <form
           onSubmit={handleSubmit(async (data) => {
             setError('');
             try {
-              const r = await api.post(
-                `/auth/${registering ? 'register' : 'login'}`,
-                data,
-              );
+              const r = await api.post('/auth/login', data);
               localStorage.setItem('trackly_token', r.data.access_token);
-              nav('/dashboard');
+              const me = await api.get('/auth/me');
+              nav(me.data.must_change_password ? '/change-password' : '/dashboard');
             } catch (e) {
               setError(errorMessage(e));
             }
           })}
         >
-          {registering && (
-            <div className="form-grid">
-              <Field label="First name">
-                <input required {...register('first_name')} />
-              </Field>
-              <Field label="Last name">
-                <input required {...register('last_name')} />
-              </Field>
-            </div>
-          )}
           <Field label="Email">
             <input type="email" autoComplete="email" {...register('email')} />
           </Field>
           <Field label="Password">
             <input
               type="password"
-              autoComplete={registering ? 'new-password' : 'current-password'}
+              autoComplete="current-password"
               {...register('password')}
             />
           </Field>
@@ -76,24 +62,13 @@ export default function LoginPage() {
             </p>
           )}
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting
-              ? 'Please wait…'
-              : registering
-                ? 'Create account'
-                : 'Sign in'}
+            {isSubmitting ? 'Please wait…' : 'Sign in'}
           </Button>
         </form>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setRegistering(!registering);
-            setError('');
-          }}
-        >
-          {registering
-            ? 'Already have an account? Sign in'
-            : 'New to Zeno Work Suite? Create an account'}
-        </Button>
+        <p className="muted">
+          Need an account or forgot your password? Ask your Zeno Work Suite
+          administrator.
+        </p>
       </div>
     </div>
   );
