@@ -16,6 +16,10 @@ const QaDashboardPage = lazy(() => import('../pages/QaDashboardPage'));
 const QaBoardPage = lazy(() => import('../pages/QaBoardPage'));
 const BugsPage = lazy(() => import('../pages/BugsPage'));
 const TraceabilityPage = lazy(() => import('../pages/TraceabilityPage'));
+const WorkItemsPage = lazy(() => import('../pages/WorkItemsPage'));
+const EpicsPage = lazy(() => import('../pages/EpicsPage'));
+const ReportsPage = lazy(() => import('../pages/ReportsPage'));
+const ProjectSettingsPage = lazy(() => import('../pages/ProjectSettingsPage'));
 const MyIssuesPage = lazy(() => import('../pages/MyIssuesPage'));
 const VoiceAgentPage = lazy(() => import('../pages/VoiceAgentPage'));
 // Reads the token on every render so a fresh sign-in is seen immediately.
@@ -45,6 +49,23 @@ export default function AppRoutes() {
           <Route
             path="/projects/:projectId/backlog"
             element={<BacklogPage />}
+          />
+          <Route
+            path="/projects/:projectId/work-items"
+            element={<WorkItemsPage />}
+          />
+          <Route path="/projects/:projectId/epics" element={<EpicsPage />} />
+          <Route
+            path="/projects/:projectId/test-cases"
+            element={<TestCasesPage />}
+          />
+          <Route
+            path="/projects/:projectId/reports"
+            element={<ReportsPage />}
+          />
+          <Route
+            path="/projects/:projectId/settings"
+            element={<ProjectSettingsPage />}
           />
           <Route path="/issues/:issueId" element={<IssueDetailsPage />} />
           <Route

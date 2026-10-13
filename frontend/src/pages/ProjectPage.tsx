@@ -1,180 +1,157 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useData, useIssues, useMe, useSave } from '../hooks/data';
-import type { Project } from '../types';
-import { PageHeader, State, Field } from '../components/ui/shared';
+import { Link, useParams } from 'react-router-dom';
+import { useData, useIssues } from '../hooks/data';
+import { statuses, type Project, type Sprint } from '../types';
+import { percent } from '../lib/qa';
+import { PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
-import { Modal } from '../components/ui/dialog';
+import { Kpi, Progress } from '../components/ui/charts';
+import { useCreateIssue } from '../components/layout/AppShell';
 import IssueTable from '../components/issues/IssueTable';
+import IssueCharts from '../components/issues/IssueCharts';
+
 export default function ProjectPage() {
   const { projectId } = useParams();
-  const query = useData<Project>(`/projects/${projectId}`);
-  const issues = useIssues(Number(projectId));
-  const me = useMe();
-  const [tab, setTab] = useState('Overview');
-  const [edit, setEdit] = useState(false);
-  const nav = useNavigate();
-  const save = useSave(`/projects/${projectId}`, 'put');
-  const member = useSave(
-    `/projects/${projectId}/members`,
-    'post',
-    'Member added',
-  );
-  const del = useSave(`/projects/${projectId}`, 'delete', 'Project deleted');
+  const pid = Number(projectId);
+  const query = useData<Project>(`/projects/${pid}`);
+  const issues = useIssues(pid);
+  const sprints = useData<Sprint[]>(`/projects/${pid}/sprints`);
+  const create = useCreateIssue();
   const p = query.data;
   if (!p) return <State loading={query.isLoading} error={query.error} />;
-  const owner = p.owner_id === me.data?.id;
+  const all = issues.data ?? [];
+  const work = all.filter((i) => i.issue_type !== 'EPIC');
+  const epics = all.filter((i) => i.issue_type === 'EPIC');
+  const active = sprints.data?.find((s) => s.status === 'ACTIVE');
+  const next = sprints.data
+    ?.filter((s) => s.status === 'PLANNED')
+    .sort((a, b) => a.id - b.id)[0];
+  const sprintItems = work.filter((i) => i.sprint_id === active?.id);
+  const kanban = p.board_type === 'KANBAN';
   return (
     <>
-      <PageHeader title={p.name} description={`${p.key} · ${p.description}`}>
+      <PageHeader
+        title="Overview"
+        description={p.description || 'No description yet.'}
+      >
         <Button asChild variant="outline">
           <Link to={`/projects/${p.id}/backlog`}>Open backlog</Link>
         </Button>
-        {owner && (
-          <Button variant="outline" onClick={() => setEdit(true)}>
-            Settings
-          </Button>
-        )}
+        <Button onClick={() => create({ project_id: p.id })}>
+          + Create issue
+        </Button>
       </PageHeader>
-      <div className="tabs">
-        {[
-          'Overview',
-          'Backlog',
-          'Sprints',
-          'Board',
-          'Quality',
-          'Bugs',
-          'Traceability',
-          'Issues',
-          'Members',
-        ].map((t) =>
-          [
-            'Backlog',
-            'Sprints',
-            'Board',
-            'Quality',
-            'Bugs',
-            'Traceability',
-          ].includes(t) ? (
-            <Link key={t} to={`/projects/${p.id}/${t.toLowerCase()}`}>
-              {t}
-            </Link>
-          ) : (
-            <button
-              key={t}
-              className={tab === t ? 'selected' : ''}
-              onClick={() => setTab(t)}
-            >
-              {t}
-            </button>
-          ),
-        )}
+      <State loading={issues.isLoading} error={issues.error} />
+      <div className="kpis">
+        <Kpi
+          name="Open work items"
+          value={work.filter((i) => i.status !== 'DONE').length}
+          hint={`${work.length} total`}
+        />
+        <Kpi
+          name="In progress"
+          value={
+            work.filter((i) =>
+              ['IN_PROGRESS', 'CODE_REVIEW', 'TESTING'].includes(i.status),
+            ).length
+          }
+          tone="warn"
+        />
+        <Kpi
+          name="Done"
+          value={work.filter((i) => i.status === 'DONE').length}
+          tone="good"
+        />
+        <Kpi
+          name="Open bugs"
+          value={
+            work.filter((i) => i.issue_type === 'BUG' && i.status !== 'DONE')
+              .length
+          }
+          tone="bad"
+        />
       </div>
-      {tab === 'Members' ? (
+      <div className="chart-grid-2">
         <section className="card">
-          <h2>Project members</h2>
-          {p.members.map((u) => (
-            <div className="list-row" key={u.id}>
-              <strong>
-                {u.first_name} {u.last_name}
-              </strong>
-              <span>{u.email}</span>
-              {u.id === p.owner_id && <span>Owner</span>}
-            </div>
-          ))}
-          {owner && (
-            <form
-              className="inline-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                try {
-                  await member.mutateAsync({
-                    email: new FormData(form).get('email'),
-                  });
-                  form.reset();
-                } catch {
-                  /*toast*/
-                }
-              }}
-            >
-              <input
-                name="email"
-                type="email"
-                required
-                aria-label="Registered member email"
-                placeholder="Add a registered teammate by email"
-              />
-              <Button type="submit" disabled={member.isPending}>
-                Add member
-              </Button>
-            </form>
-          )}
-        </section>
-      ) : (
-        <section className="card">
-          <h2>{tab === 'Overview' ? 'Project issues' : 'All issues'}</h2>
-          <State loading={issues.isLoading} error={issues.error} />
-          <IssueTable issues={issues.data ?? []} />
-        </section>
-      )}
-      <Modal
-        open={edit}
-        onClose={() => setEdit(false)}
-        title="Project settings"
-      >
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              await save.mutateAsync(
-                Object.fromEntries(new FormData(e.currentTarget)),
-              );
-              setEdit(false);
-            } catch {
-              /*toast*/
-            }
-          }}
-        >
-          <Field label="Name">
-            <input name="name" required defaultValue={p.name} />
-          </Field>
-          <Field label="Description">
-            <textarea name="description" defaultValue={p.description} />
-          </Field>
-          <Field label="Status">
-            <select name="status" defaultValue={p.status}>
-              <option>ACTIVE</option>
-              <option>ARCHIVED</option>
-            </select>
-          </Field>
-          <div className="actions">
-            <Button
-              variant="destructive"
-              disabled={del.isPending}
-              onClick={async () => {
-                if (
-                  window.confirm(
-                    'Delete this project and all its issues, sprints and tests?',
-                  )
-                ) {
-                  try {
-                    await del.mutateAsync({});
-                    nav('/projects');
-                  } catch {
-                    /*toast*/
-                  }
-                }
-              }}
-            >
-              Delete project
-            </Button>
-            <Button type="submit" disabled={save.isPending}>
-              Save changes
+          <div className="section-head">
+            <h2>
+              {kanban
+                ? 'Kanban flow'
+                : active
+                  ? `Active sprint · ${active.name}`
+                  : 'No active sprint'}
+            </h2>
+            <Button asChild variant="outline">
+              <Link to={`/projects/${p.id}/board`}>Open board</Link>
             </Button>
           </div>
-        </form>
-      </Modal>
+          {kanban || active ? (
+            <>
+              {active && !kanban && (
+                <p className="muted">
+                  {active.goal || 'No goal set'} · {active.start_date} —{' '}
+                  {active.end_date} ·{' '}
+                  {sprintItems
+                    .filter((i) => i.status === 'DONE')
+                    .reduce((n, i) => n + i.story_points, 0)}{' '}
+                  of {sprintItems.reduce((n, i) => n + i.story_points, 0)}{' '}
+                  points done
+                </p>
+              )}
+              <Progress
+                rows={statuses.map((s) => ({
+                  key: s,
+                  count: (kanban ? work : sprintItems).filter(
+                    (i) => i.status === s,
+                  ).length,
+                }))}
+              />
+            </>
+          ) : (
+            <p className="muted">
+              {next
+                ? `${next.name} is planned. Start it from the backlog when the team is ready.`
+                : 'Create a sprint in the backlog to start planning.'}
+            </p>
+          )}
+        </section>
+        <section className="card">
+          <div className="section-head">
+            <h2>Epics</h2>
+            <Link to={`/projects/${p.id}/epics`}>View all →</Link>
+          </div>
+          {!epics.length && <p className="muted">No epics yet.</p>}
+          {epics.slice(0, 5).map((e) => {
+            const items = all.filter((i) => i.epic_id === e.id);
+            const done = items.filter((i) => i.status === 'DONE').length;
+            return (
+              <div className="chart-row" key={e.id}>
+                <Link to={`/issues/${e.id}`}>{e.summary}</Link>
+                <div className="bar-track">
+                  <div
+                    className="bar bar-done"
+                    style={{ width: `${percent(done, items.length)}%` }}
+                  />
+                </div>
+                <strong>{percent(done, items.length)}%</strong>
+              </div>
+            );
+          })}
+        </section>
+      </div>
+      <div className="dashboard-detail">
+        <section className="card">
+          <div className="section-head">
+            <h2>Recently updated</h2>
+            <Link to={`/projects/${p.id}/work-items`}>All work items →</Link>
+          </div>
+          <IssueTable
+            issues={[...all]
+              .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+              .slice(0, 8)}
+          />
+        </section>
+        <IssueCharts issues={work} />
+      </div>
     </>
   );
 }

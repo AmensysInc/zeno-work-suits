@@ -11,6 +11,7 @@ from app.api import (
     shared_steps,
     executions,
     quality,
+    reports,
     comments,
     voice,
 )
@@ -32,6 +33,7 @@ for module in (
     shared_steps,
     executions,
     quality,
+    reports,
     comments,
     voice,
 ):

@@ -23,10 +23,35 @@ def edit(db, actor, id, data):
     return sprint
 
 
-def transition(db, actor, id, target):
+def delete(db, actor, id):
     sprint = child_access(db, Sprint, id, actor)
     project_access(db, sprint.project_id, actor, lock=True)
     db.refresh(sprint)
+    if sprint.status != "PLANNED":
+        raise HTTPException(409, "Only a planned sprint can be deleted")
+    for issue in list(sprint.issues):
+        issue.sprint_id = None
+        if issue.status == "TODO":
+            issue.status = "BACKLOG"
+    record(db, actor, sprint.project_id, None, "deleted sprint", new=sprint.name)
+    db.delete(sprint)
+    db.commit()
+
+
+def transition(db, actor, id, target, move_to=None):
+    sprint = child_access(db, Sprint, id, actor)
+    project_access(db, sprint.project_id, actor, lock=True)
+    db.refresh(sprint)
+    next_sprint = None
+    if move_to is not None:
+        next_sprint = db.get(Sprint, move_to)
+        if (
+            target != "COMPLETED"
+            or not next_sprint
+            or next_sprint.project_id != sprint.project_id
+            or next_sprint.status != "PLANNED"
+        ):
+            raise HTTPException(422, "Move unfinished work to a planned sprint")
     if target == "ACTIVE":
         if sprint.status != "PLANNED":
             raise HTTPException(409, "Only a planned sprint can start")
@@ -46,6 +71,7 @@ def transition(db, actor, id, target):
             raise HTTPException(409, "Only an active sprint can complete")
         for issue in list(sprint.issues):
             if issue.status != "DONE":
+                # Reports read this entry to know what the sprint committed to.
                 record(
                     db,
                     actor,
@@ -54,10 +80,11 @@ def transition(db, actor, id, target):
                     "returned unfinished work to backlog",
                     "sprint_id",
                     sprint.id,
-                    None,
+                    next_sprint.id if next_sprint else None,
                 )
-                issue.sprint_id = None
-                issue.status = "BACKLOG"
+                issue.sprint_id = next_sprint.id if next_sprint else None
+                if not next_sprint:
+                    issue.status = "BACKLOG"
     sprint.status = target
     record(
         db,

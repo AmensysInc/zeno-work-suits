@@ -38,3 +38,8 @@ def delete(id: int, db: DB, actor: Actor):
 @router.post("/{id}/members", response_model=ProjectOut)
 def add_member(id: int, data: MemberIn, db: DB, actor: Actor):
     return projects.add_member(db, id, data.email, actor)
+
+
+@router.delete("/{id}/members/{user_id}", response_model=ProjectOut)
+def remove_member(id: int, user_id: int, db: DB, actor: Actor):
+    return projects.remove_member(db, id, user_id, actor)

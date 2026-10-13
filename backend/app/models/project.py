@@ -21,6 +21,8 @@ class Project(Timestamps, Base):
     description: Mapped[str] = mapped_column(Text, default="")
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(20), default="ACTIVE")
+    # SCRUM boards show the active sprint; KANBAN boards show all work in flow.
+    board_type: Mapped[str] = mapped_column(String(20), default="SCRUM")
     issue_counter: Mapped[int] = mapped_column(default=0)
     test_counter: Mapped[int] = mapped_column(default=0)
     owner = relationship("User", back_populates="projects")

@@ -1,8 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from sqlalchemy import select
 from app.api.deps import DB, Actor
 from app.models import Sprint
-from app.schemas.sprint import SprintIn, SprintOut
+from app.schemas.sprint import SprintIn, SprintOut, SprintCompleteIn
 from app.services.access import project_access
 from app.services import sprints
 
@@ -35,5 +35,12 @@ def start(id: int, db: DB, actor: Actor):
 
 
 @router.post("/sprints/{id}/complete", response_model=SprintOut)
-def complete(id: int, db: DB, actor: Actor):
-    return sprints.transition(db, actor, id, "COMPLETED")
+def complete(id: int, db: DB, actor: Actor, data: SprintCompleteIn | None = None):
+    move_to = data.move_to_sprint_id if data else None
+    return sprints.transition(db, actor, id, "COMPLETED", move_to)
+
+
+@router.delete("/sprints/{id}", status_code=204)
+def delete(id: int, db: DB, actor: Actor):
+    sprints.delete(db, actor, id)
+    return Response(status_code=204)

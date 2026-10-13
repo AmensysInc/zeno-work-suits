@@ -3,7 +3,13 @@ from sqlalchemy import select, or_
 from app.api.deps import DB, Actor
 from app.models import Project
 from app.models import Issue
-from app.schemas.issue import IssueIn, IssueOut, IssueUpdate, StatusIn
+from app.schemas.issue import (
+    IssueIn,
+    IssueOut,
+    IssueUpdate,
+    StatusIn,
+    BulkIssueUpdate,
+)
 from app.services.access import visible_projects, project_access, issue_access
 from app.services import issues
 
@@ -32,6 +38,11 @@ def index(
 @router.post("", response_model=IssueOut, status_code=201)
 def create(data: IssueIn, db: DB, actor: Actor):
     return issues.create(db, data, actor)
+
+
+@router.patch("/bulk", response_model=list[IssueOut])
+def bulk(data: BulkIssueUpdate, db: DB, actor: Actor):
+    return issues.bulk_edit(db, data.ids, data.changes, actor)
 
 
 @router.get("/{id}", response_model=IssueOut)

@@ -21,3 +21,8 @@ class SprintOut(SprintIn):
     id: int
     project_id: int
     status: str
+
+
+class SprintCompleteIn(BaseModel):
+    # Carry unfinished work into this planned sprint instead of the backlog.
+    move_to_sprint_id: int | None = None

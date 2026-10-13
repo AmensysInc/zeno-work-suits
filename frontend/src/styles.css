@@ -1520,3 +1520,214 @@ td.wrap,
     grid-column: auto;
   }
 }
+
+/* Project management */
+.project-nav {
+  margin: -6px 0 24px;
+}
+.project-nav .tabs {
+  margin-bottom: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.project-nav .tabs a {
+  white-space: nowrap;
+}
+.project-crumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.project-crumb .project-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.planning-stack {
+  display: flex;
+  flex-direction: column;
+}
+.planning-item > div.actions {
+  flex: none;
+  flex-wrap: nowrap;
+}
+.planning-item > div > .actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.planning-item select {
+  width: 120px;
+}
+.sprint-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.icon-button {
+  border: 0;
+  background: transparent;
+  color: #a1a9b8;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.icon-button:hover {
+  background: #f1f3f8;
+  color: #161a22;
+}
+.chip-epic {
+  background: #f1ecff;
+  color: #7a52f2;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bulk-bar {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: #f5f7ff;
+  border: 1px solid #c9d3fb;
+  border-radius: 10px;
+}
+.bulk-bar select {
+  width: auto;
+  min-width: 140px;
+}
+.epic-card .progress-wrap {
+  margin: 14px 0 6px;
+}
+.epic-card .section-head + .section-head {
+  margin-top: 8px;
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 24px;
+  align-items: start;
+}
+.danger-zone {
+  border-color: #f6c4c7;
+}
+.chart-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.chart-grid-2 > .card {
+  margin-bottom: 0;
+}
+.chart-grid-2 + .card,
+.chart-grid-2 + .chart-grid-2 {
+  margin-top: 24px;
+}
+.column-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  height: 180px;
+  padding-top: 8px;
+  overflow-x: auto;
+}
+.column-chart .group {
+  flex: 1 0 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+.column-chart .bars {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+}
+.column-chart .bars span {
+  width: 14px;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+}
+.column-chart small {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.burndown svg {
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+}
+.burndown .axis {
+  stroke: var(--border);
+}
+.burndown .ideal {
+  stroke: #b7bfcc;
+  stroke-dasharray: 4 4;
+  fill: none;
+}
+.burndown .actual {
+  stroke: var(--primary);
+  stroke-width: 2.5;
+  fill: none;
+}
+.burndown text {
+  font-size: 10px;
+  fill: var(--muted);
+}
+.bar-backlog {
+  background: #dfe3eb;
+}
+.bar-todo,
+.bar-story,
+.bar-committed,
+.bar-created {
+  background: #8ea2f9;
+}
+.bar-in_progress,
+.bar-completed,
+.bar-resolved {
+  background: #4f6ef7;
+}
+.bar-code_review,
+.bar-subtask {
+  background: #9a7aee;
+}
+.bar-completed,
+.bar-resolved {
+  background: #2aaa7a;
+}
+@media (max-width: 1000px) {
+  .settings-grid,
+  .chart-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .chart-grid-2 > .card {
+    margin-bottom: 24px;
+  }
+}
+@media (max-width: 650px) {
+  .planning-item {
+    flex-wrap: wrap;
+  }
+  .planning-item > div:not(.actions) {
+    flex-basis: calc(100% - 60px);
+  }
+}
+.inline-select {
+  width: auto;
+  min-width: 160px;
+}

@@ -69,6 +69,12 @@ export default function ProjectsPage() {
           <Field label="Description">
             <textarea name="description" />
           </Field>
+          <Field label="Board">
+            <select name="board_type" defaultValue="SCRUM">
+              <option value="SCRUM">Scrum · plan work in sprints</option>
+              <option value="KANBAN">Kanban · continuous flow</option>
+            </select>
+          </Field>
           <div className="form-footer actions">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel

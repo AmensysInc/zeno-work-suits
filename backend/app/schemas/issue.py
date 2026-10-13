@@ -58,3 +58,8 @@ class IssueOut(IssueIn):
 
 class StatusIn(BaseModel):
     status: Status
+
+
+class BulkIssueUpdate(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=200)
+    changes: IssueUpdate
