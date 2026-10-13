@@ -16,8 +16,14 @@ const QaDashboardPage = lazy(() => import('../pages/QaDashboardPage'));
 const QaBoardPage = lazy(() => import('../pages/QaBoardPage'));
 const BugsPage = lazy(() => import('../pages/BugsPage'));
 const TraceabilityPage = lazy(() => import('../pages/TraceabilityPage'));
+const WorkItemsPage = lazy(() => import('../pages/WorkItemsPage'));
+const EpicsPage = lazy(() => import('../pages/EpicsPage'));
+const ReportsPage = lazy(() => import('../pages/ReportsPage'));
+const ProjectSettingsPage = lazy(() => import('../pages/ProjectSettingsPage'));
 const MyIssuesPage = lazy(() => import('../pages/MyIssuesPage'));
 const VoiceAgentPage = lazy(() => import('../pages/VoiceAgentPage'));
+const PeoplePage = lazy(() => import('../pages/PeoplePage'));
+const GitHubPage = lazy(() => import('../pages/GitHubPage'));
 // Reads the token on every render so a fresh sign-in is seen immediately.
 function RequireAuth() {
   return localStorage.getItem('trackly_token') ? (
@@ -46,6 +52,23 @@ export default function AppRoutes() {
             path="/projects/:projectId/backlog"
             element={<BacklogPage />}
           />
+          <Route
+            path="/projects/:projectId/work-items"
+            element={<WorkItemsPage />}
+          />
+          <Route path="/projects/:projectId/epics" element={<EpicsPage />} />
+          <Route
+            path="/projects/:projectId/test-cases"
+            element={<TestCasesPage />}
+          />
+          <Route
+            path="/projects/:projectId/reports"
+            element={<ReportsPage />}
+          />
+          <Route
+            path="/projects/:projectId/settings"
+            element={<ProjectSettingsPage />}
+          />
           <Route path="/issues/:issueId" element={<IssueDetailsPage />} />
           <Route
             path="/projects/:projectId/sprints"
@@ -72,6 +95,8 @@ export default function AppRoutes() {
             element={<TestCaseDetailsPage />}
           />
           <Route path="/my-issues" element={<MyIssuesPage />} />
+          <Route path="/people" element={<PeoplePage />} />
+          <Route path="/github" element={<GitHubPage />} />
           <Route path="/voice-agent" element={<VoiceAgentPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

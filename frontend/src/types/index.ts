@@ -1,9 +1,36 @@
+export const roles = ['ADMIN', 'MANAGER', 'EMPLOYEE'] as const;
+export type Role = (typeof roles)[number];
 export interface User {
   id: number;
   first_name: string;
   last_name: string;
   email: string;
+  role: Role;
   avatar_url: string | null;
+}
+/** Admins run the whole workspace. Managers can open new projects. */
+export const canCreateProjects = (role?: string) =>
+  role === 'ADMIN' || role === 'MANAGER';
+/** Admins manage every project. Managers manage the projects they own. */
+export const canManageProject = (
+  me: Pick<User, 'id' | 'role'> | undefined,
+  project: { owner_id: number },
+) =>
+  !!me &&
+  (me.role === 'ADMIN' ||
+    (me.role === 'MANAGER' && me.id === project.owner_id));
+export const projectRoles = [
+  'LEAD',
+  'DEVELOPER',
+  'DESIGNER',
+  'TESTER',
+  'BUSINESS_ANALYST',
+  'DEVOPS',
+] as const;
+export type ProjectRole = (typeof projectRoles)[number];
+export interface TeamMember {
+  user: User;
+  role: ProjectRole;
 }
 export interface Project {
   id: number;
@@ -12,10 +39,58 @@ export interface Project {
   description: string;
   owner_id: number;
   status: string;
+  board_type: 'SCRUM' | 'KANBAN';
+  start_date: string | null;
+  end_date: string | null;
+  code_freeze_date: string | null;
+  testing_date: string | null;
+  github_repo: string;
   created_at: string;
   updated_at: string;
   members: User[];
+  team: TeamMember[];
 }
+export interface GitHubRepo {
+  full_name: string;
+  html_url: string;
+  description: string;
+  private: boolean;
+  default_branch: string;
+  linked_projects: string[];
+}
+export interface GitHubBranch {
+  name: string;
+  sha: string;
+  protected: boolean;
+}
+export interface GitHubBranches {
+  repository: string;
+  html_url: string;
+  default_branch: string;
+  can_merge: boolean;
+  branches: GitHubBranch[];
+}
+export interface GitHubPull {
+  number: number;
+  title: string;
+  state: 'open' | 'closed' | 'merged';
+  draft: boolean;
+  head: string;
+  base: string;
+  author: string;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+}
+/** "owner/name" for a linked https://github.com/owner/name URL. */
+export const repoName = (url: string) =>
+  url.match(/^https:\/\/github\.com\/([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/)?.[1];
+export const projectDates = [
+  ['start_date', 'Start date'],
+  ['end_date', 'End date'],
+  ['code_freeze_date', 'Code freeze'],
+  ['testing_date', 'Testing'],
+] as const;
 export const issueTypes = ['EPIC', 'STORY', 'TASK', 'BUG', 'SUBTASK'] as const;
 export const priorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 export const statuses = [
@@ -198,6 +273,45 @@ export interface TraceStory {
 export interface Traceability {
   epics: TraceIssue[];
   stories: TraceStory[];
+}
+type ReportUser = Pick<User, 'id' | 'first_name' | 'last_name'>;
+export interface ProjectReport {
+  summary: {
+    total_issues: number;
+    open_issues: number;
+    done_issues: number;
+    total_points: number;
+    done_points: number;
+    open_bugs: number;
+    average_velocity: number | null;
+    average_lead_time_days: number | null;
+  };
+  by_status: { key: string; count: number }[];
+  by_type: { key: string; count: number }[];
+  by_priority: { key: string; count: number }[];
+  velocity: {
+    sprint_id: number;
+    name: string;
+    status: Sprint['status'];
+    committed_points: number;
+    completed_points: number;
+    committed_issues: number;
+    completed_issues: number;
+  }[];
+  burndown: {
+    sprint_id: number;
+    name: string;
+    total_points: number;
+    days: { date: string; remaining: number | null; ideal: number }[];
+  } | null;
+  workload: {
+    user: ReportUser | null;
+    open_issues: number;
+    open_points: number;
+    in_progress: number;
+    done_issues: number;
+  }[];
+  created_vs_resolved: { week: string; created: number; resolved: number }[];
 }
 export interface Comment {
   id: number;

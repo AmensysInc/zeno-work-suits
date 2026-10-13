@@ -6,20 +6,23 @@ import { PageHeader, State, Badge } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
 import SprintModal from '../components/sprints/SprintModal';
 import PlanningBoard from '../components/sprints/PlanningBoard';
+import CompleteSprintModal from '../components/sprints/CompleteSprintModal';
 export default function SprintPlanningPage() {
   const pid = Number(useParams().projectId);
   const query = useData<Sprint[]>(`/projects/${pid}/sprints`);
   const issues = useIssues(pid);
   const [selectedId, setSelectedId] = useState<number>();
-  const [modal, setModal] = useState<'create' | 'edit' | 'start' | null>(null);
+  const [modal, setModal] = useState<
+    'create' | 'edit' | 'start' | 'complete' | null
+  >(null);
   const selected =
     query.data?.find((s) => s.id === selectedId) ??
     query.data?.find((s) => s.status === 'ACTIVE') ??
     query.data?.[0];
-  const complete = useSave(
-    `/sprints/${selected?.id}/complete`,
-    'post',
-    'Sprint completed',
+  const remove = useSave(
+    `/sprints/${selected?.id}`,
+    'delete',
+    'Sprint deleted',
   );
   const sprintIssues =
     issues.data?.filter((i) => i.sprint_id === selected?.id) ?? [];
@@ -68,24 +71,38 @@ export default function SprintPlanningPage() {
                 </Button>
               )}
               {selected.status === 'PLANNED' && (
-                <Button onClick={() => setModal('start')}>Start sprint</Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    disabled={remove.isPending}
+                    onClick={async () => {
+                      if (
+                        window.confirm(
+                          `Delete ${selected.name}? Its issues return to the backlog.`,
+                        )
+                      ) {
+                        try {
+                          await remove.mutateAsync({});
+                          setSelectedId(undefined);
+                        } catch {
+                          /* toast */
+                        }
+                      }
+                    }}
+                  >
+                    Delete
+                  </Button>
+                  <Button onClick={() => setModal('start')}>
+                    Start sprint
+                  </Button>
+                </>
               )}
               {selected.status === 'ACTIVE' && (
                 <>
                   <Button asChild variant="outline">
                     <Link to={`/projects/${pid}/board`}>View board</Link>
                   </Button>
-                  <Button
-                    disabled={complete.isPending}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Complete sprint? Unfinished issues will return to the backlog.',
-                        )
-                      )
-                        complete.mutate({});
-                    }}
-                  >
+                  <Button onClick={() => setModal('complete')}>
                     Complete sprint
                   </Button>
                 </>
@@ -96,11 +113,19 @@ export default function SprintPlanningPage() {
             projectId={pid}
             issues={issues.data ?? []}
             sprints={query.data ?? []}
-            selected={selected}
+            zones={[selected]}
           />
         </>
       )}
-      {modal && (
+      {modal === 'complete' && selected && (
+        <CompleteSprintModal
+          sprint={selected}
+          sprints={query.data ?? []}
+          issues={issues.data ?? []}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal && modal !== 'complete' && (
         <SprintModal
           projectId={pid}
           sprint={modal === 'create' ? undefined : selected}
