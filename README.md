@@ -114,6 +114,7 @@ Backend reads `backend/.env` relative to its working directory:
 | `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://trackly:trackly_dev@127.0.0.1:5433/trackly` |
 | `JWT_SECRET` | Required secret for HS256 signing; use a long random value |
 | `CORS_ORIGINS` | JSON array of allowed frontend origins; defaults to localhost/127.0.0.1 port 5173 |
+| `GITHUB_TOKEN` | Optional GitHub personal access token for the GitHub page. Needs read/write **Contents** and **Pull requests** on the repositories you link |
 
 Frontend optionally reads `frontend/.env`:
 

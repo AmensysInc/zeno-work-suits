@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useData, useIssues } from '../hooks/data';
-import { statuses, type Project, type Sprint } from '../types';
+import { projectDates, statuses, type Project, type Sprint } from '../types';
 import { percent } from '../lib/qa';
 import { PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
@@ -40,6 +40,23 @@ export default function ProjectPage() {
           + Create issue
         </Button>
       </PageHeader>
+      {(projectDates.some(([name]) => p[name]) || p.github_repo) && (
+        <p className="muted project-schedule">
+          {projectDates.map(
+            ([name, title]) =>
+              p[name] && (
+                <span key={name}>
+                  {title}: <strong>{p[name]}</strong>
+                </span>
+              ),
+          )}
+          {p.github_repo && (
+            <a href={p.github_repo} target="_blank" rel="noreferrer">
+              GitHub repository ↗
+            </a>
+          )}
+        </p>
+      )}
       <State loading={issues.isLoading} error={issues.error} />
       <div className="kpis">
         <Kpi

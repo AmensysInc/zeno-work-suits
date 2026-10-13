@@ -16,9 +16,10 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useProjects, useMe } from '../../hooks/data';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/shared';
 import ProjectNav, { projectPages } from './ProjectNav';
-const CreateIssueModal = lazy(() => import('../issues/CreateIssueModal'));
 import type { Issue } from '../../types';
+const CreateIssueModal = lazy(() => import('../issues/CreateIssueModal'));
 const CreateContext = createContext<(initial?: Partial<Issue>) => void>(
   () => {},
 );
@@ -87,6 +88,9 @@ export default function AppShell() {
         ['Sprints', inProject('sprints')],
         ['Board', inProject('board')],
         ['My Issues', '/my-issues'],
+        ...(me.data?.role === 'ADMIN'
+          ? [['People', '/people'] as [string, string]]
+          : []),
       ],
     ],
     [
@@ -102,6 +106,7 @@ export default function AppShell() {
         ['Traceability', inProject('traceability')],
       ],
     ],
+    ['CODE', [['GitHub', '/github']]],
     ['', [['Voice Agent', '/voice-agent']]],
   ];
   const links = sections.flatMap(([, items]) => items);
@@ -221,6 +226,7 @@ export default function AppShell() {
                         <strong>
                           {me.data?.first_name} {me.data?.last_name}
                         </strong>
+                        {me.data?.role && <Badge value={me.data.role} />}
                         <p>{me.data?.email}</p>
                         <Button
                           variant="ghost"

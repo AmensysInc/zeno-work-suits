@@ -1,7 +1,17 @@
-from sqlalchemy import String, Text, ForeignKey, Table, Column
+from datetime import date
+from sqlalchemy import Date, String, Text, ForeignKey, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 from app.models.base import Timestamps
+
+PROJECT_ROLES = (
+    "LEAD",
+    "DEVELOPER",
+    "DESIGNER",
+    "TESTER",
+    "BUSINESS_ANALYST",
+    "DEVOPS",
+)
 
 project_members = Table(
     "project_members",
@@ -10,7 +20,19 @@ project_members = Table(
         "project_id", ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
     ),
     Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "role",
+        String(30),
+        nullable=False,
+        default="DEVELOPER",
+        server_default="DEVELOPER",
+    ),
 )
+
+
+class ProjectMember(Base):
+    __table__ = project_members
+    user = relationship("User", viewonly=True)
 
 
 class Project(Timestamps, Base):
@@ -23,10 +45,20 @@ class Project(Timestamps, Base):
     status: Mapped[str] = mapped_column(String(20), default="ACTIVE")
     # SCRUM boards show the active sprint; KANBAN boards show all work in flow.
     board_type: Mapped[str] = mapped_column(String(20), default="SCRUM")
+    start_date: Mapped[date | None] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    code_freeze_date: Mapped[date | None] = mapped_column(Date)
+    testing_date: Mapped[date | None] = mapped_column(Date)
+    github_repo: Mapped[str] = mapped_column(String(500), default="")
     issue_counter: Mapped[int] = mapped_column(default=0)
     test_counter: Mapped[int] = mapped_column(default=0)
     owner = relationship("User", back_populates="projects")
-    members = relationship("User", secondary=project_members)
+    members = relationship("User", secondary=project_members, overlaps="team")
+    team = relationship(
+        "ProjectMember",
+        viewonly=True,
+        order_by=project_members.c.user_id,
+    )
     issues = relationship(
         "Issue",
         back_populates="project",

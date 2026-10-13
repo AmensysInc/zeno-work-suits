@@ -14,6 +14,7 @@ from app.api import (
     reports,
     comments,
     voice,
+    github,
 )
 
 app = FastAPI(title="Zeno Work Suite API", version="1.0.0")
@@ -36,6 +37,7 @@ for module in (
     reports,
     comments,
     voice,
+    github,
 ):
     app.include_router(module.router, prefix="/api")
 

@@ -22,6 +22,8 @@ const ReportsPage = lazy(() => import('../pages/ReportsPage'));
 const ProjectSettingsPage = lazy(() => import('../pages/ProjectSettingsPage'));
 const MyIssuesPage = lazy(() => import('../pages/MyIssuesPage'));
 const VoiceAgentPage = lazy(() => import('../pages/VoiceAgentPage'));
+const PeoplePage = lazy(() => import('../pages/PeoplePage'));
+const GitHubPage = lazy(() => import('../pages/GitHubPage'));
 // Reads the token on every render so a fresh sign-in is seen immediately.
 function RequireAuth() {
   return localStorage.getItem('trackly_token') ? (
@@ -93,6 +95,8 @@ export default function AppRoutes() {
             element={<TestCaseDetailsPage />}
           />
           <Route path="/my-issues" element={<MyIssuesPage />} />
+          <Route path="/people" element={<PeoplePage />} />
+          <Route path="/github" element={<GitHubPage />} />
           <Route path="/voice-agent" element={<VoiceAgentPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

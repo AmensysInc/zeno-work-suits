@@ -1,22 +1,35 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useData, useMe, useSave } from '../hooks/data';
-import type { Project, User } from '../types';
-import { Field, PageHeader, State } from '../components/ui/shared';
+import {
+  canManageProject,
+  label,
+  projectRoles,
+  type Project,
+  type ProjectRole,
+  type TeamMember,
+} from '../types';
+import { Badge, Field, PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
+import ProjectFields from '../components/projects/ProjectFields';
 
 function MemberRow({
   project,
-  user,
+  member: { user, role },
   canRemove,
 }: {
   project: Project;
-  user: User;
+  member: TeamMember;
   canRemove: boolean;
 }) {
   const remove = useSave(
     `/projects/${project.id}/members/${user.id}`,
     'delete',
     'Member removed',
+  );
+  const changeRole = useSave(
+    `/projects/${project.id}/members`,
+    'post',
+    'Project role updated',
   );
   return (
     <div className="list-row">
@@ -28,7 +41,26 @@ function MemberRow({
         {user.first_name} {user.last_name}
       </strong>
       <span className="muted">{user.email}</span>
+      <Badge value={user.role} />
       {user.id === project.owner_id && <span className="badge">Owner</span>}
+      {canRemove ? (
+        <select
+          aria-label={`Project role for ${user.first_name} ${user.last_name}`}
+          value={role}
+          disabled={changeRole.isPending}
+          onChange={(e) =>
+            changeRole.mutate({ user_ids: [user.id], role: e.target.value })
+          }
+        >
+          {projectRoles.map((r) => (
+            <option key={r} value={r}>
+              {label(r)}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="badge">{label(role)}</span>
+      )}
       {canRemove && user.id !== project.owner_id && (
         <Button
           variant="ghost"
@@ -63,15 +95,15 @@ export default function ProjectSettingsPage() {
   const del = useSave(`/projects/${projectId}`, 'delete', 'Project deleted');
   const p = query.data;
   if (!p) return <State loading={query.isLoading} error={query.error} />;
-  const owner = p.owner_id === me.data?.id;
+  const canManage = canManageProject(me.data, p);
   return (
     <>
       <PageHeader
         title="Project settings"
         description={
-          owner
+          canManage
             ? 'Details, workflow and who can work in this project.'
-            : 'Only the project owner can change these settings.'
+            : 'Only an admin, or a manager who owns this project, can change these settings.'
         }
       />
       <div className="settings-grid">
@@ -90,7 +122,7 @@ export default function ProjectSettingsPage() {
               }
             }}
           >
-            <fieldset disabled={!owner}>
+            <fieldset disabled={!canManage}>
               <Field label="Key">
                 <input value={p.key} disabled readOnly />
               </Field>
@@ -105,6 +137,7 @@ export default function ProjectSettingsPage() {
               <Field label="Description">
                 <textarea name="description" defaultValue={p.description} />
               </Field>
+              <ProjectFields project={p} />
               <div className="form-grid">
                 <Field label="Board">
                   <select name="board_type" defaultValue={p.board_type}>
@@ -119,7 +152,7 @@ export default function ProjectSettingsPage() {
                   </select>
                 </Field>
               </div>
-              {owner && (
+              {canManage && (
                 <div className="actions form-footer">
                   <Button type="submit" disabled={save.isPending}>
                     Save changes
@@ -130,19 +163,26 @@ export default function ProjectSettingsPage() {
           </form>
         </section>
         <section className="card">
-          <h2>Members · {p.members.length}</h2>
-          {p.members.map((u) => (
-            <MemberRow key={u.id} project={p} user={u} canRemove={owner} />
+          <h2>Members · {p.team.length}</h2>
+          {p.team.map((m) => (
+            <MemberRow
+              key={m.user.id}
+              project={p}
+              member={m}
+              canRemove={canManage}
+            />
           ))}
-          {owner && (
+          {canManage && (
             <form
               className="inline-form"
               onSubmit={async (e) => {
                 e.preventDefault();
                 const form = e.currentTarget;
+                const data = new FormData(form);
                 try {
                   await member.mutateAsync({
-                    email: new FormData(form).get('email'),
+                    email: data.get('email'),
+                    role: data.get('role') as ProjectRole,
                   });
                   form.reset();
                 } catch {
@@ -157,6 +197,17 @@ export default function ProjectSettingsPage() {
                 aria-label="Registered member email"
                 placeholder="Add a registered teammate by email"
               />
+              <select
+                name="role"
+                aria-label="Project role"
+                defaultValue="DEVELOPER"
+              >
+                {projectRoles.map((r) => (
+                  <option key={r} value={r}>
+                    {label(r)}
+                  </option>
+                ))}
+              </select>
               <Button type="submit" disabled={member.isPending}>
                 Add member
               </Button>
@@ -164,7 +215,7 @@ export default function ProjectSettingsPage() {
           )}
         </section>
       </div>
-      {owner && (
+      {canManage && (
         <section className="card danger-zone">
           <div className="section-head">
             <div>
