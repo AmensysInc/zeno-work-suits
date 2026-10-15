@@ -1,4 +1,4 @@
-from datetime import datetime
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
@@ -19,13 +19,22 @@ class Register(Login):
     last_name: str = Field(min_length=1, max_length=80)
 
 
+class UserCreate(Register):
+    role: Literal["ADMIN", "MANAGER", "EMPLOYEE"] = "EMPLOYEE"
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     first_name: str
     last_name: str
     email: str
+    role: str
     avatar_url: str | None
+
+
+class RoleIn(BaseModel):
+    role: Literal["ADMIN", "MANAGER", "EMPLOYEE"]
 
 
 class Token(BaseModel):

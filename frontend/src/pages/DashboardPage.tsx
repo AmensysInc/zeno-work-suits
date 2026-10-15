@@ -40,6 +40,7 @@ export default function DashboardPage() {
         <section className="card">
           <h2>Recent issues</h2>
           <IssueTable
+            showProject
             issues={[...issues]
               .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
               .slice(0, 6)}

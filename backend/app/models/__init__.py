@@ -1,5 +1,5 @@
 from .user import User
-from .project import Project
+from .project import Project, ProjectMember
 from .issue import Issue
 from .sprint import Sprint
 from .acceptance_criterion import AcceptanceCriterion

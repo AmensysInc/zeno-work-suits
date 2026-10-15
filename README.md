@@ -11,6 +11,12 @@ A local, full-stack project tracker built with React, TypeScript and FastAPI. Po
 - Story acceptance criteria: add, edit, reorder, complete and delete.
 - Planned, active and completed sprints. One active sprint per project. Completing a sprint returns unfinished work to the backlog and retains completed work in sprint history.
 - Five-column Kanban board with persisted drag-and-drop status changes and optimistic updates with rollback.
+- Project workspace tabs: Overview, Product Backlog, All Work Items, Epics, Sprints, Board, Bugs, Test Cases, Reports and Settings.
+- Product Backlog shows every active and planned sprint above the ranked backlog, with search, filters, inline edit/delete, drag-to-rank and bulk move/assign/prioritize (`PATCH /api/issues/bulk`, all-or-nothing).
+- Scrum or Kanban per project (Settings). Scrum boards show the active sprint; Kanban boards show all work in flow.
+- Planned sprints can be deleted; completing a sprint can carry unfinished work into a planned sprint instead of the backlog.
+- Reports: sprint burndown, velocity (committed vs completed), created vs resolved, status/priority/type breakdowns and team workload (`GET /api/projects/{id}/reports`).
+- Owners can remove members; their open work becomes unassigned.
 - Test cases linked to stories, editable/reorderable test steps, results, and prefilled bugs linked to both their story and failed test.
 - Comments with author-only editing/deletion and issue activity history.
 - Dashboard counts, status/type charts, recent issues, global search, and My Issues.
@@ -108,6 +114,7 @@ Backend reads `backend/.env` relative to its working directory:
 | `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://trackly:trackly_dev@127.0.0.1:5433/trackly` |
 | `JWT_SECRET` | Required secret for HS256 signing; use a long random value |
 | `CORS_ORIGINS` | JSON array of allowed frontend origins; defaults to localhost/127.0.0.1 port 5173 |
+| `GITHUB_TOKEN` | Optional GitHub personal access token for the GitHub page. Needs read/write **Contents** and **Pull requests** on the repositories you link |
 
 Frontend optionally reads `frontend/.env`:
 
