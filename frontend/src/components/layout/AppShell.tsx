@@ -13,11 +13,9 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { useProjects, useMe } from '../../hooks/data';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/shared';
-import ProjectNav, { projectPages } from './ProjectNav';
+import ProjectNav from './ProjectNav';
+import SidebarProfile from './SidebarProfile';
 import type { Issue } from '../../types';
 const CreateIssueModal = lazy(() => import('../issues/CreateIssueModal'));
 const CreateContext = createContext<(initial?: Partial<Issue>) => void>(
@@ -51,11 +49,9 @@ export default function AppShell() {
   const me = useMe();
   const location = useLocation();
   const nav = useNavigate();
-  const qc = useQueryClient();
   const [create, setCreate] = useState<Partial<Issue> | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState('');
-  const [profile, setProfile] = useState(false);
   const [lastProject, setLastProject] = useState(remembered);
   const [pageProject, setPageProject] = useState<number>();
   const match = location.pathname.match(/projects\/(\d+)/);
@@ -109,21 +105,21 @@ export default function AppShell() {
     ['CODE', [['GitHub', '/github']]],
     ['', [['Voice Agent', '/voice-agent']]],
   ];
-  const links = sections.flatMap(([, items]) => items);
   const isCurrent = (url: string) => url.split('?')[0] === location.pathname;
   const projectPage = location.pathname.match(/^\/projects\/(\d+)\/?([\w-]*)$/);
   const navProject = projectPage ? Number(projectPage[1]) : pageProject;
-  const title = projectPage
-    ? (projectPages.find(([, path]) => path === projectPage[2])?.[0] ??
-      links.find(([, url]) => isCurrent(url))?.[0] ??
-      'Project workspace')
-    : location.pathname.includes('/issues/')
-      ? 'Issue details'
-      : location.pathname.startsWith('/test-cases/')
-        ? location.pathname.endsWith('/new')
-          ? 'Add Test Case'
-          : 'Test case details'
-        : (links.find(([, url]) => isCurrent(url))?.[0] ?? 'Project workspace');
+  /** Shows the same page for another project, else that project's overview. */
+  const switchProject = (id: number) => {
+    if (projectPage) {
+      nav(`/projects/${id}/${projectPage[2]}${location.search}`);
+    } else if (location.pathname === '/test-cases') {
+      const params = new URLSearchParams(location.search);
+      params.set('project', String(id));
+      nav(`/test-cases?${params}`);
+    } else {
+      nav(`/projects/${id}`);
+    }
+  };
   return (
     <PageProjectContext.Provider value={setPageProject}>
       <ProjectContext.Provider value={projectId}>
@@ -182,6 +178,7 @@ export default function AppShell() {
               <div className="sidebar-footer">
                 <span>One place. Every next step.</span>
               </div>
+              <SidebarProfile />
             </aside>
             <div className="workspace">
               <header className="topbar">
@@ -193,7 +190,6 @@ export default function AppShell() {
                   >
                     ☰
                   </button>
-                  <h2>{title}</h2>
                 </div>
                 <div className="actions">
                   <form
@@ -210,37 +206,22 @@ export default function AppShell() {
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </form>
-                  <Button onClick={() => setCreate({ project_id: projectId })}>
-                    + Create
-                  </Button>
-                  <div className="profile">
-                    <button
-                      className="avatar-button"
-                      onClick={() => setProfile(!profile)}
-                      aria-label="Profile menu"
-                    >
-                      <img alt="" src="/assets/imgEllipse2.svg" />
-                    </button>
-                    {profile && (
-                      <div className="profile-menu">
-                        <strong>
-                          {me.data?.first_name} {me.data?.last_name}
-                        </strong>
-                        {me.data?.role && <Badge value={me.data.role} />}
-                        <p>{me.data?.email}</p>
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            localStorage.removeItem('trackly_token');
-                            qc.clear();
-                            nav('/login');
-                          }}
-                        >
-                          Sign out
-                        </Button>
-                      </div>
+                  <select
+                    className="project-switcher"
+                    aria-label="Project"
+                    value={projectId ?? ''}
+                    disabled={!projects.data?.length}
+                    onChange={(e) => switchProject(Number(e.target.value))}
+                  >
+                    {!projects.data?.length && (
+                      <option value="">No projects</option>
                     )}
-                  </div>
+                    {projects.data?.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </header>
               <main>

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from app.api.deps import DB, Actor
-from app.schemas.auth import Login, Register, UserOut, Token, RoleIn
+from app.schemas.auth import Login, Register, UserOut, Token, RoleIn, UserCreate
 from app.services import auth
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -24,6 +24,11 @@ def me(actor: Actor):
 @router.get("/users", response_model=list[UserOut])
 def users(db: DB, actor: Actor):
     return auth.list_users(db, actor)
+
+
+@router.post("/users", response_model=UserOut, status_code=201)
+def add_user(data: UserCreate, db: DB, actor: Actor):
+    return auth.create_user(db, actor, data)
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)

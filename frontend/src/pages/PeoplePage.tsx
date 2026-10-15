@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { useData, useMe, useSave } from '../hooks/data';
 import { Badge, PageHeader, State } from '../components/ui/shared';
+import { Button } from '../components/ui/button';
+import AddPersonModal from '../components/people/AddPersonModal';
 import { label, roles, type Role, type User } from '../types';
 
 function PersonRow({ user }: { user: User }) {
@@ -39,6 +42,7 @@ export default function PeoplePage() {
   const me = useMe();
   const admin = me.data?.role === 'ADMIN';
   const users = useData<User[]>('/auth/users', admin);
+  const [adding, setAdding] = useState(false);
   if (!me.data) return <State loading={me.isLoading} error={me.error} />;
   if (!admin)
     return (
@@ -52,7 +56,10 @@ export default function PeoplePage() {
       <PageHeader
         title="People"
         description="Admin can open every project. Managers run the projects they own. Employees work inside the projects they belong to."
-      />
+      >
+        <Button onClick={() => setAdding(true)}>+ Add person</Button>
+      </PageHeader>
+      {adding && <AddPersonModal onClose={() => setAdding(false)} />}
       <section className="card">
         <State
           loading={users.isLoading}

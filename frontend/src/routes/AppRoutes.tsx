@@ -37,7 +37,7 @@ export default function AppRoutes() {
     <Suspense
       fallback={
         <div className="empty" role="status">
-          Loading�
+          Loading…
         </div>
       }
     >

@@ -11,6 +11,37 @@ def register(client, email, first="Nina"):
     return {"Authorization": "Bearer " + response.json()["access_token"]}
 
 
+def test_admin_adds_people(client, auth):
+    person = {
+        "first_name": "Priya",
+        "last_name": "Shah",
+        "email": "Priya@Example.com",
+        "password": "Welcome123!",
+        "role": "MANAGER",
+    }
+    added = client.post("/api/auth/users", headers=auth, json=person)
+    assert added.status_code == 201, added.text
+    assert added.json()["email"] == "priya@example.com"
+    assert added.json()["role"] == "MANAGER"
+    assert "password_hash" not in added.json()
+    # They can sign in with the password the admin set.
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "priya@example.com", "password": "Welcome123!"},
+    )
+    assert login.status_code == 200
+    assert client.post("/api/auth/users", headers=auth, json=person).status_code == 409
+    assert (
+        client.post(
+            "/api/auth/users", headers=auth, json={**person, "password": "short"}
+        ).status_code
+        == 422
+    )
+    manager = {"Authorization": "Bearer " + login.json()["access_token"]}
+    other = {**person, "email": "other@example.com"}
+    assert client.post("/api/auth/users", headers=manager, json=other).status_code == 403
+
+
 def test_roles_and_admin_access(client, auth):
     me = client.get("/api/auth/me", headers=auth).json()
     assert me["role"] == "ADMIN"

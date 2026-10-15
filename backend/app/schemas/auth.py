@@ -19,6 +19,10 @@ class Register(Login):
     last_name: str = Field(min_length=1, max_length=80)
 
 
+class UserCreate(Register):
+    role: Literal["ADMIN", "MANAGER", "EMPLOYEE"] = "EMPLOYEE"
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

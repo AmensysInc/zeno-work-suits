@@ -4,13 +4,8 @@ import type { Project } from '../../types';
 
 export const projectPages: [string, string][] = [
   ['Overview', ''],
-  ['Product Backlog', 'backlog'],
   ['All Work Items', 'work-items'],
   ['Epics', 'epics'],
-  ['Sprints', 'sprints'],
-  ['Board', 'board'],
-  ['Bugs', 'bugs'],
-  ['Test Cases', 'test-cases'],
   ['Reports', 'reports'],
   ['Settings', 'settings'],
 ];

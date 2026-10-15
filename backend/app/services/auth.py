@@ -40,6 +40,25 @@ def list_users(db, actor):
     ).all()
 
 
+def create_user(db, actor, data):
+    if actor.role != "ADMIN":
+        raise HTTPException(403, "Only an admin can add people")
+    user = User(
+        first_name=data.first_name.strip(),
+        last_name=data.last_name.strip(),
+        email=data.email.lower(),
+        password_hash=hash_password(data.password),
+        role=data.role,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Someone with that email already has an account")
+    return user
+
+
 def set_role(db, actor, user_id, role):
     if actor.role != "ADMIN":
         raise HTTPException(403, "Only an admin can change roles")
