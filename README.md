@@ -115,6 +115,7 @@ Backend reads `backend/.env` relative to its working directory:
 | `JWT_SECRET` | Required secret for HS256 signing; use a long random value |
 | `CORS_ORIGINS` | JSON array of allowed frontend origins; defaults to localhost/127.0.0.1 port 5173 |
 | `GITHUB_TOKEN` | Optional GitHub personal access token for the GitHub page. Needs read/write **Contents** and **Pull requests** on the repositories you link |
+| `OPENAI_API_KEY` | Optional OpenAI key for the AI Requirements & Test Generator. Without it, drafts still come from GitHub code analysis |
 
 Frontend optionally reads `frontend/.env`:
 

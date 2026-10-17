@@ -13,6 +13,9 @@ from app.api import (
     quality,
     reports,
     comments,
+    chat,
+    automations,
+    ai_generator,
     voice,
     github,
 )
@@ -36,6 +39,9 @@ for module in (
     quality,
     reports,
     comments,
+    chat,
+    automations,
+    ai_generator,
     voice,
     github,
 ):

@@ -553,8 +553,275 @@ tbody tr:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
 }
+.project-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 20px;
+}
+.project-toolbar input {
+  max-width: 420px;
+}
 .project-card {
   padding: 24px;
+}
+.automation-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.automation-heading h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.automation-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.automation-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: inline-grid;
+  place-items: center;
+  background: #eef2ff;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 800;
+}
+.automation-card {
+  min-height: 120px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+  padding: 18px;
+}
+.automation-card .empty {
+  min-height: 80px;
+  display: grid;
+  place-items: center;
+}
+.automation-rule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.automation-rule + .automation-rule {
+  margin-top: 12px;
+}
+.automation-rule h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.automation-form {
+  display: grid;
+  gap: 14px;
+}
+.generator-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.generator-review h3 {
+  margin: 16px 0 8px;
+  font-size: 14px;
+}
+.generator-story,
+.generator-test {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 14px;
+}
+.generator-test {
+  background: #f8fafc;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+.check-row input {
+  width: auto;
+}
+.automation-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.chat-page {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 0;
+  min-height: calc(100vh - 112px);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.chat-list {
+  border-right: 1px solid var(--border);
+  background: #fbfcff;
+  min-width: 0;
+}
+.chat-list-head {
+  padding: 18px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.chat-list h2,
+.chat-header h1,
+.chat-members h2 {
+  margin: 0;
+}
+.chat-list input {
+  margin-top: 12px;
+  min-height: 36px;
+}
+.chat-list nav {
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  max-height: calc(100vh - 210px);
+  overflow: auto;
+}
+.chat-list a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  color: var(--text);
+}
+.chat-list a.selected {
+  background: #e9e5ff;
+}
+.chat-dot {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #64748b;
+  border-radius: 4px;
+  display: inline-block;
+}
+.chat-thread {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 0;
+}
+.chat-header {
+  min-height: 64px;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.chat-header h1 {
+  font-size: 20px;
+}
+.pin-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+}
+.chat-body {
+  min-height: 420px;
+  max-height: calc(100vh - 250px);
+  overflow: auto;
+  padding: 28px 20px;
+  background: #f8fafc;
+}
+.chat-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 22px;
+  max-width: 620px;
+}
+.chat-message.mine {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+.chat-message.mine .chat-author {
+  text-align: right;
+}
+.chat-author {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.chat-bubble {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+.chat-message.mine .chat-bubble {
+  background: #eef2ff;
+}
+.chat-bubble p {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+}
+.chat-bubble small {
+  color: var(--muted);
+}
+.chat-composer {
+  border-top: 1px solid var(--border);
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.chat-composer button[aria-label='Attach file'] {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+}
+.chat-composer input {
+  min-height: 40px;
+}
+.chat-members {
+  position: fixed;
+  right: 28px;
+  top: 92px;
+  width: 280px;
+  z-index: 20;
+  display: grid;
+  gap: 12px;
+}
+.chat-members .section-head button {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+}
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.member-row div {
+  display: grid;
 }
 .project-icon {
   width: 42px;
@@ -777,11 +1044,33 @@ fieldset.field {
   main {
     padding: 24px;
   }
+  .chat-page {
+    grid-template-columns: 1fr;
+  }
+  .chat-list {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .chat-list nav {
+    display: flex;
+    overflow: auto;
+  }
+  .chat-list a {
+    white-space: nowrap;
+  }
+  .chat-members {
+    right: 20px;
+    width: 280px;
+  }
   .stats {
     gap: 10px;
   }
   .page-heading {
     flex-wrap: wrap;
+  }
+  .automation-rule {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 @media (max-width: 600px) {
@@ -807,6 +1096,29 @@ fieldset.field {
   }
   .project-grid {
     grid-template-columns: 1fr;
+  }
+  .chat-header,
+  .chat-composer {
+    grid-template-columns: 1fr;
+  }
+  .chat-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .chat-composer {
+    display: flex;
+  }
+  .automation-grid,
+  .generator-grid {
+    grid-template-columns: 1fr;
+  }
+  .automation-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .chat-members {
+    left: 72px;
+    width: auto;
   }
   .tabs {
     gap: 14px;

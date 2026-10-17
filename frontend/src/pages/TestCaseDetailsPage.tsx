@@ -133,6 +133,18 @@ export default function TestCaseDetailsPage() {
                       : 'View story'}
                   </Link>
                 </dd>
+                {tc.ai_source?.source_commit && (
+                  <>
+                    <dt>Generated from</dt>
+                    <dd>
+                      {tc.ai_source.repository}
+                      {tc.ai_source.module_path
+                        ? ` / ${tc.ai_source.module_path}`
+                        : ''}{' '}
+                      @{tc.ai_source.source_commit.slice(0, 7)}
+                    </dd>
+                  </>
+                )}
               </dl>
               <h3 className="spaced">Covers acceptance criteria</h3>
               {covered?.length ? (

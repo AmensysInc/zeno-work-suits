@@ -85,6 +85,64 @@ export interface GitHubPull {
 /** "owner/name" for a linked https://github.com/owner/name URL. */
 export const repoName = (url: string) =>
   url.match(/^https:\/\/github\.com\/([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/)?.[1];
+export const generatorOutputs = ['USER_STORIES', 'TEST_CASES', 'BOTH'] as const;
+export type GeneratorOutput = (typeof generatorOutputs)[number];
+export const generatorCoverage = [
+  'POSITIVE',
+  'NEGATIVE',
+  'BOUNDARY',
+  'VALIDATION',
+] as const;
+export type GeneratorCoverage = (typeof generatorCoverage)[number];
+export interface AiSource {
+  repository: string;
+  module_path: string;
+  source_commit: string;
+  generator?: string;
+}
+export interface GeneratorModule {
+  path: string;
+  file_count: number;
+}
+export interface GeneratedStep {
+  action: string;
+  test_data: string;
+  expected_result: string;
+}
+export interface GeneratedTestCase {
+  title: string;
+  test_type: string;
+  priority: string;
+  preconditions: string;
+  test_data: string;
+  expected_result: string;
+  steps: GeneratedStep[];
+}
+export interface GeneratedStory {
+  title: string;
+  description: string;
+  priority: string;
+  story_points: number;
+  acceptance_criteria: string[];
+  test_cases: GeneratedTestCase[];
+}
+export interface GeneratedDraft {
+  project_id: number;
+  repository: string;
+  module_path: string;
+  source_commit: string;
+  output_type: GeneratorOutput;
+  coverage: GeneratorCoverage[];
+  user_stories: GeneratedStory[];
+  notes: string[];
+}
+export interface GeneratorSuggestions {
+  source_commit: string;
+  current_commit: string;
+  stale_story_ids: number[];
+  stale_test_case_ids: number[];
+  message: string;
+}
 export const projectDates = [
   ['start_date', 'Start date'],
   ['end_date', 'End date'],
@@ -120,6 +178,7 @@ export interface Issue {
   order_index: number;
   start_date: string | null;
   due_date: string | null;
+  ai_source?: AiSource | null;
   created_at: string;
   updated_at: string;
   related_issue_id: number | null;
@@ -188,6 +247,7 @@ export interface TestCase {
   criterion_ids: number[];
   last_executed_on: string | null;
   execution_count: number;
+  ai_source?: AiSource | null;
   created_at: string;
   updated_at: string;
 }
@@ -321,6 +381,35 @@ export interface Comment {
   created_at: string;
   updated_at: string;
   user: User;
+}
+export interface ChatMessage {
+  id: number;
+  project_id: number;
+  user_id: number;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  user: User;
+}
+export const automationActions = [
+  'NOTIFY_REPORTER',
+  'NOTIFY_ASSIGNEE',
+  'CREATE_BUG',
+] as const;
+export type AutomationAction = (typeof automationActions)[number];
+export interface AutomationRule {
+  id: number;
+  name: string;
+  owner_id: number;
+  project_id: number | null;
+  trigger: 'STATUS_CHANGED';
+  to_status: (typeof statuses)[number];
+  action: AutomationAction;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  owner: User;
+  project: Project | null;
 }
 export interface Activity {
   id: number;

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     sonix_api_key: str = ""
     github_token: str = ""
+    openai_api_key: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

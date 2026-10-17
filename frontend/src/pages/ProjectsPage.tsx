@@ -12,11 +12,28 @@ export default function ProjectsPage() {
   const me = useMe();
   const [open, setOpen] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [search, setSearch] = useState('');
   const save = useSave('/projects', 'post', 'Project created');
   const canCreate = canCreateProjects(me.data?.role);
   const manageable = (query.data ?? []).filter((p) =>
     canManageProject(me.data, p),
   );
+  const normalizedSearch = search.trim().toLowerCase();
+  const projects = (query.data ?? []).filter((p) => {
+    if (!normalizedSearch) return true;
+    return [
+      p.name,
+      p.key,
+      p.description,
+      p.status,
+      p.github_repo,
+      p.team
+        .map((m) => `${m.user.first_name} ${m.user.last_name} ${m.user.email}`)
+        .join(' '),
+    ]
+      .filter(Boolean)
+      .some((value) => value?.toLowerCase().includes(normalizedSearch));
+  });
   return (
     <>
       <PageHeader
@@ -37,8 +54,25 @@ export default function ProjectsPage() {
         error={query.error}
         empty={query.data?.length === 0}
       />
+      {(query.data?.length ?? 0) > 0 && (
+        <div className="project-toolbar">
+          <input
+            type="search"
+            aria-label="Search projects"
+            placeholder="Search projects by name, key, status or member..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <span className="muted">
+            {projects.length} of {query.data?.length ?? 0} projects
+          </span>
+        </div>
+      )}
+      {normalizedSearch && projects.length === 0 && (
+        <div className="empty">No projects match "{search}".</div>
+      )}
       <div className="project-grid">
-        {query.data?.map((p) => {
+        {projects.map((p) => {
           const mine = p.team.find((m) => m.user.id === me.data?.id);
           return (
             <Link

@@ -1,4 +1,4 @@
-from sqlalchemy import String, Text, ForeignKey, UniqueConstraint, Table, Column
+from sqlalchemy import String, Text, ForeignKey, UniqueConstraint, Table, Column, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 from app.models.base import Timestamps
@@ -38,6 +38,7 @@ class TestCase(Timestamps, Base):
     test_data: Mapped[str] = mapped_column(Text, default="")
     # Latest execution result, kept in sync by the executions service.
     status: Mapped[str] = mapped_column(String(20), default="NOT_RUN")
+    ai_source: Mapped[dict | None] = mapped_column(JSON)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     steps = relationship(
         "TestCaseStep",

@@ -84,6 +84,8 @@ export default function AppShell() {
         ['Sprints', inProject('sprints')],
         ['Board', inProject('board')],
         ['My Issues', '/my-issues'],
+        ['Chats', projectId ? `/chat?project=${projectId}` : '/chat'],
+        ['Automations', '/automations'],
         ...(me.data?.role === 'ADMIN'
           ? [['People', '/people'] as [string, string]]
           : []),
@@ -93,6 +95,10 @@ export default function AppShell() {
       'QUALITY',
       [
         ['QA Dashboard', inProject('quality')],
+        [
+          'AI Generator',
+          projectId ? `/ai-generator?project=${projectId}` : '/ai-generator',
+        ],
         [
           'Test Repository',
           projectId ? `/test-cases?project=${projectId}` : '/test-cases',
@@ -116,6 +122,10 @@ export default function AppShell() {
       const params = new URLSearchParams(location.search);
       params.set('project', String(id));
       nav(`/test-cases?${params}`);
+    } else if (location.pathname === '/chat') {
+      nav(`/chat?project=${id}`);
+    } else if (location.pathname === '/ai-generator') {
+      nav(`/ai-generator?project=${id}`);
     } else {
       nav(`/projects/${id}`);
     }

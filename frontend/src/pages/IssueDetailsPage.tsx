@@ -37,6 +37,15 @@ export default function IssueDetailsPage() {
             {issue.issue_key} · {issue.issue_type}
           </p>
           <h1>{issue.summary}</h1>
+          {issue.ai_source?.source_commit && (
+            <p className="muted">
+              Generated from {issue.ai_source.repository}
+              {issue.ai_source.module_path
+                ? ` / ${issue.ai_source.module_path}`
+                : ''}{' '}
+              @{issue.ai_source.source_commit.slice(0, 7)}
+            </p>
+          )}
         </div>
         <div className="actions">
           <Button variant="outline" onClick={() => create(issue)}>

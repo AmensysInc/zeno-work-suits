@@ -50,6 +50,7 @@ class IssueOut(IssueIn):
     id: int
     issue_key: str
     reporter_id: int
+    ai_source: dict | None
     created_at: datetime
     updated_at: datetime
     assignee: UserOut | None
