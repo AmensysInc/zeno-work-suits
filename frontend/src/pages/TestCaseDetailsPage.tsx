@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button';
 import TestCaseForm from '../components/testing/TestCaseForm';
 import RunTestModal from '../components/testing/RunTestModal';
 import ExecutionHistory from '../components/testing/ExecutionHistory';
+import { usePageProject } from '../components/layout/AppShell';
 export default function TestCaseDetailsPage() {
   const { testCaseId } = useParams();
   const query = useData<TestCase>(`/test-cases/${testCaseId}`);
@@ -25,6 +26,7 @@ export default function TestCaseDetailsPage() {
   const nav = useNavigate();
   const [editing, setEditing] = useState(false);
   const [running, setRunning] = useState(false);
+  usePageProject(tc?.project_id);
   if (!tc) return <State loading={query.isLoading} error={query.error} />;
   const covered = criteria.data?.filter((c) => tc.criterion_ids.includes(c.id));
   return (
@@ -50,7 +52,7 @@ export default function TestCaseDetailsPage() {
               return;
             try {
               await del.mutateAsync({});
-              nav('/test-cases');
+              nav(`/projects/${tc.project_id}/test-cases`);
             } catch {
               /*toast*/
             }
@@ -131,6 +133,18 @@ export default function TestCaseDetailsPage() {
                       : 'View story'}
                   </Link>
                 </dd>
+                {tc.ai_source?.source_commit && (
+                  <>
+                    <dt>Generated from</dt>
+                    <dd>
+                      {tc.ai_source.repository}
+                      {tc.ai_source.module_path
+                        ? ` / ${tc.ai_source.module_path}`
+                        : ''}{' '}
+                      @{tc.ai_source.source_commit.slice(0, 7)}
+                    </dd>
+                  </>
+                )}
               </dl>
               <h3 className="spaced">Covers acceptance criteria</h3>
               {covered?.length ? (

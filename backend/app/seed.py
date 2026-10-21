@@ -1,8 +1,9 @@
 """Idempotent demo data. Run after Alembic migrations."""
 
 from datetime import date, timedelta
-from sqlalchemy import select
+from sqlalchemy import select, update
 from app.db.database import SessionLocal
+from app.models.project import project_members
 from app.models import (
     User,
     Project,
@@ -174,8 +175,28 @@ def seed_qa(db):
     return True
 
 
+DEMO_ROLES = {
+    "alex@trackly.demo": "ADMIN",
+    "sam@trackly.demo": "MANAGER",
+    "nina@trackly.demo": "EMPLOYEE",
+}
+
+
+def ensure_demo_roles(db):
+    changed = False
+    for email, role in DEMO_ROLES.items():
+        user = db.scalar(select(User).where(User.email == email))
+        if user and user.role != role:
+            user.role = role
+            changed = True
+    if changed:
+        db.commit()
+    return changed
+
+
 def seed():
     with SessionLocal() as db:
+        ensure_demo_roles(db)
         if db.scalar(select(User).where(User.email == "alex@trackly.demo")):
             print(
                 "Added QA demo data."
@@ -189,7 +210,7 @@ def seed():
                 last_name=last,
                 email=email,
                 password_hash=hash_password("Trackly123!"),
-                is_admin=email == "alex@trackly.demo",
+                role=DEMO_ROLES[email],
             )
             for first, last, email in [
                 ("Alex", "Rivera", "alex@trackly.demo"),
@@ -210,6 +231,15 @@ def seed():
         )
         db.add(project)
         db.flush()
+        for user, role in zip(users, ("LEAD", "TESTER", "DEVELOPER")):
+            db.execute(
+                update(project_members)
+                .where(
+                    project_members.c.project_id == project.id,
+                    project_members.c.user_id == user.id,
+                )
+                .values(role=role)
+            )
         sprint = Sprint(
             project_id=project.id,
             name="Sprint 13",

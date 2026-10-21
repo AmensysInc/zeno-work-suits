@@ -12,8 +12,13 @@ from app.api import (
     shared_steps,
     executions,
     quality,
+    reports,
     comments,
+    chat,
+    automations,
+    ai_generator,
     voice,
+    github,
 )
 
 app = FastAPI(title="Zeno Work Suite API", version="1.0.0")
@@ -34,8 +39,13 @@ for module in (
     shared_steps,
     executions,
     quality,
+    reports,
     comments,
+    chat,
+    automations,
+    ai_generator,
     voice,
+    github,
 ):
     app.include_router(module.router, prefix="/api")
 

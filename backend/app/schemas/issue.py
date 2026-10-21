@@ -50,6 +50,7 @@ class IssueOut(IssueIn):
     id: int
     issue_key: str
     reporter_id: int
+    ai_source: dict | None
     created_at: datetime
     updated_at: datetime
     assignee: UserOut | None
@@ -58,3 +59,8 @@ class IssueOut(IssueIn):
 
 class StatusIn(BaseModel):
     status: Status
+
+
+class BulkIssueUpdate(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=200)
+    changes: IssueUpdate

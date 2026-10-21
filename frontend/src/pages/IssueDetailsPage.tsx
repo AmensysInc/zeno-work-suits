@@ -10,7 +10,7 @@ import Comments from '../components/issues/Comments';
 import ActivityHistory from '../components/issues/ActivityHistory';
 import AcceptanceCriteria from '../components/issues/AcceptanceCriteria';
 import IssueTable from '../components/issues/IssueTable';
-import { useCreateIssue } from '../components/layout/AppShell';
+import { useCreateIssue, usePageProject } from '../components/layout/AppShell';
 export default function IssueDetailsPage() {
   const { issueId } = useParams();
   const query = useData<Issue>(`/issues/${issueId}`);
@@ -25,7 +25,10 @@ export default function IssueDetailsPage() {
   const create = useCreateIssue();
   const nav = useNavigate();
   const [tab, setTab] = useState('Overview');
+  usePageProject(issue?.project_id);
   if (!issue) return <State loading={query.isLoading} error={query.error} />;
+  const epic = issue.issue_type === 'EPIC';
+  const childTab = epic ? 'Child issues' : 'Subtasks';
   return (
     <>
       <div className="page-heading">
@@ -34,6 +37,15 @@ export default function IssueDetailsPage() {
             {issue.issue_key} · {issue.issue_type}
           </p>
           <h1>{issue.summary}</h1>
+          {issue.ai_source?.source_commit && (
+            <p className="muted">
+              Generated from {issue.ai_source.repository}
+              {issue.ai_source.module_path
+                ? ` / ${issue.ai_source.module_path}`
+                : ''}{' '}
+              @{issue.ai_source.source_commit.slice(0, 7)}
+            </p>
+          )}
         </div>
         <div className="actions">
           <Button variant="outline" onClick={() => create(issue)}>
@@ -63,7 +75,7 @@ export default function IssueDetailsPage() {
       <div className="detail-grid">
         <div>
           <div className="tabs">
-            {['Overview', 'Subtasks', 'Test Cases', 'Comments', 'Activity'].map(
+            {['Overview', childTab, 'Test Cases', 'Comments', 'Activity'].map(
               (t) => (
                 <button
                   key={t}
@@ -105,23 +117,35 @@ export default function IssueDetailsPage() {
           ) : (
             <section className="card">
               <div className="section-head">
-                <h2>Subtasks</h2>
+                <h2>{childTab}</h2>
                 <Button
                   onClick={() =>
-                    create({
-                      project_id: issue.project_id,
-                      issue_type: 'SUBTASK',
-                      parent_issue_id: issue.id,
-                      epic_id: issue.epic_id,
-                    })
+                    create(
+                      epic
+                        ? {
+                            project_id: issue.project_id,
+                            issue_type: 'STORY',
+                            epic_id: issue.id,
+                          }
+                        : {
+                            project_id: issue.project_id,
+                            issue_type: 'SUBTASK',
+                            parent_issue_id: issue.id,
+                            epic_id: issue.epic_id,
+                          },
+                    )
                   }
                 >
-                  + Add subtask
+                  {epic ? '+ Add child issue' : '+ Add subtask'}
                 </Button>
               </div>
               <IssueTable
                 issues={
-                  all.data?.filter((i) => i.parent_issue_id === issue.id) ?? []
+                  all.data?.filter((i) =>
+                    epic
+                      ? i.epic_id === issue.id
+                      : i.parent_issue_id === issue.id,
+                  ) ?? []
                 }
               />
             </section>

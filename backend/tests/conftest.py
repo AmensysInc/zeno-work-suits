@@ -48,7 +48,7 @@ def auth(client):
                 last_name="Rivera",
                 email="alex@example.com",
                 password_hash=hash_password("Password123!"),
-                is_admin=True,
+                role="ADMIN",
             )
         )
         db.commit()
@@ -58,12 +58,18 @@ def auth(client):
     return {"Authorization": "Bearer " + response.json()["access_token"]}
 
 
-def create_user(client, admin_headers, first, last, email):
+def create_user(client, admin_headers, first, last, email, role="EMPLOYEE"):
     """Creates a regular user through the admin API and signs them in with the temporary password."""
     issued = client.post(
         "/api/admin/users",
         headers=admin_headers,
-        json={"first_name": first, "last_name": last, "email": email, "send_email": False},
+        json={
+            "first_name": first,
+            "last_name": last,
+            "email": email,
+            "role": role,
+            "send_email": False,
+        },
     )
     assert issued.status_code == 201, issued.text
     token = client.post(

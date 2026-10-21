@@ -36,7 +36,7 @@ def main(argv):
             user = User(first_name=first, last_name=last, email=email)
             db.add(user)
             action = "Created administrator"
-        user.is_admin = True
+        user.role = "ADMIN"
         user.is_active = True
         user.password_hash = hash_password(temp)
         user.must_change_password = True

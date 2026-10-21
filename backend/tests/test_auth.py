@@ -97,12 +97,12 @@ def test_disabling_a_user_blocks_access(client, auth):
 
 def test_admin_cannot_lock_themselves_out(client, auth):
     me = client.get("/api/auth/me", headers=auth).json()["id"]
-    assert client.patch(f"/api/admin/users/{me}", headers=auth, json={"is_admin": False}).status_code == 400
+    assert client.patch(f"/api/admin/users/{me}", headers=auth, json={"role": "MANAGER"}).status_code == 400
     assert client.patch(f"/api/admin/users/{me}", headers=auth, json={"is_active": False}).status_code == 400
 
 
 def test_admin_sees_all_projects(client, auth):
-    nina = create_user(client, auth, "Nina", "Kim", "nina@example.com")
+    nina = create_user(client, auth, "Nina", "Kim", "nina@example.com", role="MANAGER")
     p = client.post("/api/projects", headers=nina, json={"name": "Nina's", "key": "NIN"})
     assert p.status_code == 201, p.text
     assert [x["key"] for x in client.get("/api/projects", headers=auth).json()] == ["NIN"]

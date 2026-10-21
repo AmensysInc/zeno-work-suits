@@ -16,10 +16,18 @@ const QaDashboardPage = lazy(() => import('../pages/QaDashboardPage'));
 const QaBoardPage = lazy(() => import('../pages/QaBoardPage'));
 const BugsPage = lazy(() => import('../pages/BugsPage'));
 const TraceabilityPage = lazy(() => import('../pages/TraceabilityPage'));
+const WorkItemsPage = lazy(() => import('../pages/WorkItemsPage'));
+const EpicsPage = lazy(() => import('../pages/EpicsPage'));
+const ReportsPage = lazy(() => import('../pages/ReportsPage'));
+const ProjectSettingsPage = lazy(() => import('../pages/ProjectSettingsPage'));
 const MyIssuesPage = lazy(() => import('../pages/MyIssuesPage'));
 const VoiceAgentPage = lazy(() => import('../pages/VoiceAgentPage'));
 const ChangePasswordPage = lazy(() => import('../pages/ChangePasswordPage'));
 const AdminUsersPage = lazy(() => import('../pages/AdminUsersPage'));
+const GitHubPage = lazy(() => import('../pages/GitHubPage'));
+const ChatPage = lazy(() => import('../pages/ChatPage'));
+const AutomationsPage = lazy(() => import('../pages/AutomationsPage'));
+const AiGeneratorPage = lazy(() => import('../pages/AiGeneratorPage'));
 // Reads the token on every render so a fresh sign-in is seen immediately.
 function RequireAuth() {
   return localStorage.getItem('trackly_token') ? (
@@ -37,7 +45,7 @@ export default function AppRoutes() {
     <Suspense
       fallback={
         <div className="empty" role="status">
-          Loading�
+          Loading…
         </div>
       }
     >
@@ -59,6 +67,23 @@ export default function AppRoutes() {
           <Route
             path="/projects/:projectId/backlog"
             element={<BacklogPage />}
+          />
+          <Route
+            path="/projects/:projectId/work-items"
+            element={<WorkItemsPage />}
+          />
+          <Route path="/projects/:projectId/epics" element={<EpicsPage />} />
+          <Route
+            path="/projects/:projectId/test-cases"
+            element={<TestCasesPage />}
+          />
+          <Route
+            path="/projects/:projectId/reports"
+            element={<ReportsPage />}
+          />
+          <Route
+            path="/projects/:projectId/settings"
+            element={<ProjectSettingsPage />}
           />
           <Route path="/issues/:issueId" element={<IssueDetailsPage />} />
           <Route
@@ -86,6 +111,11 @@ export default function AppRoutes() {
             element={<TestCaseDetailsPage />}
           />
           <Route path="/my-issues" element={<MyIssuesPage />} />
+          <Route path="/people" element={<Navigate to="/admin/users" replace />} />
+          <Route path="/github" element={<GitHubPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/automations" element={<AutomationsPage />} />
+          <Route path="/ai-generator" element={<AiGeneratorPage />} />
           <Route path="/voice-agent" element={<VoiceAgentPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
         </Route>

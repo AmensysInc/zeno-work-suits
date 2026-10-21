@@ -18,7 +18,7 @@ def create_user(db, data):
         last_name=data.last_name.strip(),
         email=data.email.lower(),
         password_hash=hash_password(temp),
-        is_admin=data.is_admin,
+        role=data.role,
         must_change_password=True,
     )
     db.add(user)
@@ -41,12 +41,15 @@ def _get(db, user_id):
 def update_user(db, user_id, data, admin):
     user = _get(db, user_id)
     changes = data.model_dump(exclude_unset=True)
-    if user.id == admin.id and (changes.get("is_admin") is False or changes.get("is_active") is False):
+    demoted = changes.get("role") not in (None, "ADMIN")
+    if user.id == admin.id and (demoted or changes.get("is_active") is False):
         raise HTTPException(400, "You can't remove your own admin access or disable your own account")
-    if changes.get("is_admin") is False or changes.get("is_active") is False:
+    if demoted or changes.get("is_active") is False:
         # Never leave the application without an active administrator.
         others = db.scalar(
-            select(User.id).where(User.is_admin, User.is_active, User.id != user.id).limit(1)
+            select(User.id)
+            .where(User.role == "ADMIN", User.is_active, User.id != user.id)
+            .limit(1)
         )
         if user.is_admin and others is None:
             raise HTTPException(400, "At least one active administrator is required")

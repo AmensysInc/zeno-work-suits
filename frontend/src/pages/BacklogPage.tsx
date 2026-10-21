@@ -1,116 +1,255 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useData, useIssues } from '../hooks/data';
-import type { Sprint } from '../types';
+import type { Project, Sprint } from '../types';
 import { PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
 import { useCreateIssue } from '../components/layout/AppShell';
 import IssueTable from '../components/issues/IssueTable';
+import WorkItemFilters, {
+  useFilters,
+} from '../components/issues/WorkItemFilters';
+import BulkActions from '../components/issues/BulkActions';
 import SprintModal from '../components/sprints/SprintModal';
 import PlanningBoard from '../components/sprints/PlanningBoard';
+import CompleteSprintModal from '../components/sprints/CompleteSprintModal';
+
+const sprintOrder = (a: Sprint, b: Sprint) =>
+  Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE') ||
+  (a.start_date ?? '9999').localeCompare(b.start_date ?? '9999') ||
+  a.id - b.id;
+
 export default function BacklogPage() {
   const pid = Number(useParams().projectId);
+  const project = useData<Project>(`/projects/${pid}`);
   const query = useIssues(pid);
   const sprints = useData<Sprint[]>(`/projects/${pid}/sprints`);
   const create = useCreateIssue();
-  const [modal, setModal] = useState<Sprint | 'new' | null>(null);
-  const [planning, setPlanning] = useState<number | null>(null);
-  const openSprints =
-    sprints.data?.filter((s) => s.status !== 'COMPLETED') ?? [];
-  const selected = openSprints.find((s) => s.id === planning);
+  const filters = useFilters();
+  const [view, setView] = useState<'plan' | 'epics'>('plan');
+  const [showDone, setShowDone] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [modal, setModal] = useState<{
+    kind: 'new' | 'edit' | 'start' | 'complete';
+    sprint?: Sprint;
+  } | null>(null);
+  const kanban = project.data?.board_type === 'KANBAN';
+  const all = sprints.data ?? [];
+  const openSprints = all
+    .filter((s) => s.status !== 'COMPLETED')
+    .sort(sprintOrder);
   const issues = query.data ?? [];
+  const epics = issues.filter((i) => i.issue_type === 'EPIC');
+  const members = project.data?.members ?? [];
+  const visible = (i: (typeof issues)[number]) =>
+    filters.matches(i) && (showDone || i.status !== 'DONE');
+  const toggle = (id: number) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const inFlow = issues.filter(
+    (i) =>
+      i.issue_type !== 'EPIC' &&
+      !['BACKLOG', 'DONE'].includes(i.status) &&
+      filters.matches(i),
+  );
   return (
     <>
       <PageHeader
         title="Product Backlog"
-        description="Organize epics, stories, bugs and tasks before sprint planning."
+        description={
+          kanban
+            ? 'Rank upcoming work. Move items to To Do to pull them onto the board.'
+            : 'Plan sprints from a single ranked list of epics, stories, tasks and bugs.'
+        }
       >
-        <Button variant="outline" onClick={() => setModal('new')}>
-          + Create sprint
-        </Button>
+        {!kanban && (
+          <Button variant="outline" onClick={() => setModal({ kind: 'new' })}>
+            + Create sprint
+          </Button>
+        )}
         <Button onClick={() => create({ project_id: pid })}>
           + Create issue
         </Button>
       </PageHeader>
+      <div className="tabs">
+        <button
+          className={view === 'plan' ? 'selected' : ''}
+          onClick={() => setView('plan')}
+        >
+          {kanban ? 'Backlog' : 'Sprints & backlog'}
+        </button>
+        <button
+          className={view === 'epics' ? 'selected' : ''}
+          onClick={() => setView('epics')}
+        >
+          By epic
+        </button>
+      </div>
+      <WorkItemFilters
+        state={filters}
+        fields={['type', 'priority', 'assignee', 'epic']}
+        members={members}
+        epics={epics}
+      />
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={showDone}
+          onChange={(e) => setShowDone(e.target.checked)}
+        />
+        Show done items
+      </label>
+      <BulkActions
+        ids={[...selected]}
+        members={members}
+        sprints={kanban ? [] : all}
+        onDone={() => setSelected(new Set())}
+      />
       <State
         loading={query.isLoading || sprints.isLoading}
         error={query.error || sprints.error}
       />
-      {openSprints.map((s) => {
-        const items = issues.filter((i) => i.sprint_id === s.id);
-        return (
-          <section className="card sprint-summary" key={s.id}>
-            <div>
-              <h3>{s.name}</h3>
-              <p>Goal: {s.goal || 'No goal set'}</p>
-              <p>
-                {items.length} issues ·{' '}
-                {items.reduce((n, i) => n + i.story_points, 0)} story points ·{' '}
-                {s.start_date ?? 'Not scheduled'} — {s.end_date ?? ''}
-              </p>
-            </div>
-            <div className="actions">
-              <Button
-                variant="outline"
-                onClick={() => setPlanning(planning === s.id ? null : s.id)}
-              >
-                {planning === s.id ? 'Close planning' : 'Plan issues'}
-              </Button>
-              {s.status === 'PLANNED' ? (
-                <Button onClick={() => setModal(s)}>Start sprint</Button>
-              ) : (
-                <Button asChild>
+      {view === 'plan' ? (
+        <>
+          {kanban && (
+            <section className="card">
+              <div className="section-head">
+                <h3>On the board</h3>
+                <Button asChild variant="outline">
                   <Link to={`/projects/${pid}/board`}>Open board</Link>
                 </Button>
-              )}
-            </div>
-          </section>
-        );
-      })}
-      {selected && (
-        <PlanningBoard
-          projectId={pid}
+              </div>
+              <IssueTable issues={inFlow} />
+            </section>
+          )}
+          <PlanningBoard
+            projectId={pid}
+            issues={issues}
+            sprints={kanban ? [] : all}
+            zones={kanban ? [] : openSprints}
+            filter={visible}
+            backlogFilter={(i) =>
+              !kanban || ['BACKLOG', 'DONE'].includes(i.status)
+            }
+            selection={{ ids: selected, toggle }}
+            layout="stack"
+            sprintHead={(s) => {
+              const items = issues.filter((i) => i.sprint_id === s.id);
+              const points = items.reduce((n, i) => n + i.story_points, 0);
+              return (
+                <div className="sprint-head">
+                  <p className="muted">
+                    {s.goal || 'No goal set'} ·{' '}
+                    {s.start_date ?? 'Not scheduled'}
+                    {s.end_date ? ` — ${s.end_date}` : ''} · {points} /{' '}
+                    {s.capacity} pts
+                    {points > s.capacity && (
+                      <strong className="error"> · over capacity</strong>
+                    )}
+                  </p>
+                  <div className="actions">
+                    <Button
+                      variant="ghost"
+                      onClick={() => setModal({ kind: 'edit', sprint: s })}
+                    >
+                      Edit
+                    </Button>
+                    {s.status === 'PLANNED' ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => setModal({ kind: 'start', sprint: s })}
+                      >
+                        Start sprint
+                      </Button>
+                    ) : (
+                      <>
+                        <Button asChild variant="outline">
+                          <Link to={`/projects/${pid}/board`}>Board</Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            setModal({ kind: 'complete', sprint: s })
+                          }
+                        >
+                          Complete sprint
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            }}
+          />
+        </>
+      ) : (
+        <>
+          {[
+            ...epics.filter(
+              (e) =>
+                !filters.filters.epic || String(e.id) === filters.filters.epic,
+            ),
+            null,
+          ].map((epic) => {
+            const items = issues.filter(
+              (i) =>
+                i.issue_type !== 'EPIC' &&
+                i.epic_id === (epic?.id ?? null) &&
+                visible(i),
+            );
+            if (!items.length && !epic) return null;
+            return (
+              <section className="card" key={epic?.id ?? 'none'}>
+                <div className="section-head">
+                  <h3 className="epic">
+                    {epic ? (
+                      <Link to={`/issues/${epic.id}`}>
+                        EPIC · {epic.summary}
+                      </Link>
+                    ) : (
+                      'Ungrouped issues'
+                    )}
+                  </h3>
+                  <div className="actions">
+                    <span className="muted">{items.length} items</span>
+                    {epic && (
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          create({ project_id: pid, epic_id: epic.id })
+                        }
+                      >
+                        + Add
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <IssueTable issues={items} sprints={all} />
+              </section>
+            );
+          })}
+        </>
+      )}
+      {!query.isLoading && issues.length === 0 && <State empty />}
+      {modal?.kind === 'complete' && modal.sprint && (
+        <CompleteSprintModal
+          sprint={modal.sprint}
+          sprints={all}
           issues={issues}
-          sprints={sprints.data ?? []}
-          selected={selected}
+          onClose={() => setModal(null)}
         />
       )}
-      <p className="backlog-note">
-        Group work by epic. Use “Plan issues” to drag and reorder work between
-        the backlog and a sprint.
-      </p>
-      {[...issues.filter((i) => i.issue_type === 'EPIC'), null].map((epic) => {
-        const items = issues.filter(
-          (i) =>
-            i.issue_type !== 'EPIC' &&
-            i.epic_id === (epic?.id ?? null) &&
-            i.status !== 'DONE',
-        );
-        if (!items.length && !epic) return null;
-        return (
-          <section className="card" key={epic?.id ?? 'none'}>
-            <div className="section-head">
-              <h3 className="epic">
-                {epic ? (
-                  <Link to={`/issues/${epic.id}`}>EPIC · {epic.summary}</Link>
-                ) : (
-                  'Ungrouped issues'
-                )}
-              </h3>
-              <span className="muted">{items.length} items</span>
-            </div>
-            <IssueTable issues={items} sprints={sprints.data ?? []} />
-          </section>
-        );
-      })}
-      {issues.length === 0 && <State empty />}
-      {modal && (
+      {modal && modal.kind !== 'complete' && (
         <SprintModal
           projectId={pid}
-          sprint={modal === 'new' ? undefined : modal}
-          start={modal !== 'new'}
+          sprint={modal.sprint}
+          start={modal.kind === 'start'}
           issues={issues.filter(
-            (i) => i.sprint_id === (modal === 'new' ? null : modal.id),
+            (i) => i.sprint_id === (modal.sprint?.id ?? -1),
           )}
           onClose={() => setModal(null)}
         />

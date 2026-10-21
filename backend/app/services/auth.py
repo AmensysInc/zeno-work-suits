@@ -33,3 +33,13 @@ def change_password(db, actor, data):
     actor.must_change_password = False
     db.commit()
     return actor
+
+
+def list_users(db, actor):
+    if actor.role not in ("ADMIN", "MANAGER"):
+        raise HTTPException(403, "Only an admin or a manager can view people")
+    return db.scalars(
+        select(User)
+        .where(User.is_active)
+        .order_by(User.first_name, User.last_name, User.id)
+    ).all()

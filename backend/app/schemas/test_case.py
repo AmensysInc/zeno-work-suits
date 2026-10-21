@@ -40,6 +40,7 @@ class TestCaseOut(TestCaseIn):
     id: int
     test_case_key: str
     created_by: int
+    ai_source: dict | None
     created_at: datetime
     updated_at: datetime
     steps: list[StepOut]

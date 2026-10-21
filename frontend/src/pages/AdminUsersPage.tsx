@@ -9,14 +9,14 @@ import { api, errorMessage } from '../services/api';
 import { useData, useMe } from '../hooks/data';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
-import { Field, PageHeader, State } from '../components/ui/shared';
-import type { AdminUser, IssuedLogin } from '../types';
+import { Badge, Field, PageHeader, State } from '../components/ui/shared';
+import { label, roles, type AdminUser, type IssuedLogin, type Role } from '../types';
 
 const schema = z.object({
   first_name: z.string().trim().min(1, 'First name is required').max(80),
   last_name: z.string().trim().min(1, 'Last name is required').max(80),
   email: z.string().email('Enter a valid email'),
-  is_admin: z.boolean(),
+  role: z.enum(roles),
   send_email: z.boolean(),
 });
 type Form = z.infer<typeof schema>;
@@ -41,7 +41,7 @@ export default function AdminUsersPage() {
     formState: { errors, isSubmitting },
   } = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { is_admin: false, send_email: true },
+    defaultValues: { role: 'EMPLOYEE', send_email: true },
   });
 
   if (me.data && !me.data.is_admin) return <Navigate to="/dashboard" replace />;
@@ -78,10 +78,10 @@ export default function AdminUsersPage() {
   return (
     <>
       <PageHeader
-        title="Users"
-        description="Create accounts and send sign-in details. Admins can manage users and open every project."
+        title="People"
+        description="Create accounts and send sign-in details. Admins can open every project. Managers run the projects they own. Employees work inside the projects they belong to."
       >
-        <Button onClick={() => setAdding(true)}>+ Add user</Button>
+        <Button onClick={() => setAdding(true)}>+ Add person</Button>
       </PageHeader>
 
       <div className="card">
@@ -110,9 +110,23 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="muted">{u.email}</td>
                       <td>
-                        <span className={`badge ${u.is_admin ? 'badge-epic' : 'badge-todo'}`}>
-                          {u.is_admin ? 'Admin' : 'Member'}
-                        </span>
+                        {self ? (
+                          <Badge value={u.role} />
+                        ) : (
+                          <select
+                            className="inline-select"
+                            aria-label={`Role for ${u.first_name} ${u.last_name}`}
+                            value={u.role}
+                            disabled={busy === u.id}
+                            onChange={(e) => update(u, { role: e.target.value as Role }, 'Role updated')}
+                          >
+                            {roles.map((role) => (
+                              <option key={role} value={role}>
+                                {label(role)}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                       <td>
                         <span className={`badge ${u.is_active ? 'badge-active' : 'badge-blocked'}`}>
@@ -125,17 +139,6 @@ export default function AdminUsersPage() {
                           <Button variant="outline" disabled={busy === u.id} onClick={() => resetPassword(u)}>
                             Reset password
                           </Button>
-                          {!self && (
-                            <Button
-                              variant="ghost"
-                              disabled={busy === u.id}
-                              onClick={() =>
-                                update(u, { is_admin: !u.is_admin }, u.is_admin ? 'Admin access removed' : 'Made admin')
-                              }
-                            >
-                              {u.is_admin ? 'Remove admin' : 'Make admin'}
-                            </Button>
-                          )}
                           {!self && (
                             <Button
                               variant={u.is_active ? 'destructive' : 'ghost'}
@@ -164,7 +167,7 @@ export default function AdminUsersPage() {
           setAdding(false);
           reset();
         }}
-        title="Add user"
+        title="Add person"
       >
         <form
           onSubmit={handleSubmit(async (data) => {
@@ -190,9 +193,15 @@ export default function AdminUsersPage() {
           <Field label="Email">
             <input type="email" {...register('email')} />
           </Field>
-          <label className="check">
-            <input type="checkbox" {...register('is_admin')} /> Administrator (can manage users and every project)
-          </label>
+          <Field label="Role">
+            <select {...register('role')}>
+              {roles.map((role) => (
+                <option key={role} value={role}>
+                  {label(role)}
+                </option>
+              ))}
+            </select>
+          </Field>
           <label className="check">
             <input type="checkbox" disabled={!emailOn} {...register('send_email')} /> Email the sign-in details to
             this user

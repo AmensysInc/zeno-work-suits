@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     sendgrid_api_key: str = ""
     mail_from: str = ""
     mail_from_name: str = "Zeno Work Suite"
+    github_token: str = ""
+    openai_api_key: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

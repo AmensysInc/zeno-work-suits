@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
@@ -28,12 +29,16 @@ class ChangePassword(BaseModel):
         return _max_72_bytes(value)
 
 
+Role = Literal["ADMIN", "MANAGER", "EMPLOYEE"]
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     first_name: str
     last_name: str
     email: str
+    role: str
     avatar_url: str | None
     is_admin: bool = False
     must_change_password: bool = False
@@ -55,14 +60,14 @@ class AdminUserCreate(BaseModel):
     first_name: str = Field(min_length=1, max_length=80)
     last_name: str = Field(min_length=1, max_length=80)
     email: EmailStr
-    is_admin: bool = False
+    role: Role = "EMPLOYEE"
     send_email: bool = True
 
 
 class AdminUserUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=80)
     last_name: str | None = Field(default=None, min_length=1, max_length=80)
-    is_admin: bool | None = None
+    role: Role | None = None
     is_active: bool | None = None
 
 

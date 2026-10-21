@@ -20,3 +20,8 @@ def me(actor: Actor):
 @router.post("/change-password", response_model=UserOut)
 def change_password(data: ChangePassword, db: DB, actor: Actor):
     return auth.change_password(db, actor, data)
+
+
+@router.get("/users", response_model=list[UserOut])
+def users(db: DB, actor: Actor):
+    return auth.list_users(db, actor)
