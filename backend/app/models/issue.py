@@ -50,6 +50,7 @@ class Issue(Timestamps, Base):
     story_points: Mapped[int] = mapped_column(default=0)
     order_index: Mapped[float] = mapped_column(default=0)
     labels: Mapped[list] = mapped_column(JSON, default=list)
+    ai_source: Mapped[dict | None] = mapped_column(JSON)
     start_date: Mapped[date | None]
     due_date: Mapped[date | None]
     project = relationship("Project", back_populates="issues")

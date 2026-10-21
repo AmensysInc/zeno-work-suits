@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useProjects } from '../hooks/data';
 import { PageHeader, State } from '../components/ui/shared';
 import TestCaseList from '../components/testing/TestCaseList';
@@ -8,9 +8,16 @@ export default function TestCasesPage() {
   const projects = useProjects();
   const current = useCurrentProject();
   const [params, setParams] = useSearchParams();
-  const projectId = Number(params.get('project')) || current;
+  const nav = useNavigate();
+  // Inside a project the route owns the project; the global page uses ?project=.
+  const routeProject = Number(useParams().projectId) || undefined;
+  const projectId = routeProject ?? (Number(params.get('project')) || current);
   const tab = params.get('tab') === 'steps' ? 'steps' : 'tests';
   const set = (key: string, value: string) => {
+    if (routeProject && key === 'project') {
+      nav(`/projects/${value}/test-cases?${params}`);
+      return;
+    }
     const next = new URLSearchParams(params);
     next.set(key, value);
     setParams(next, { replace: true });

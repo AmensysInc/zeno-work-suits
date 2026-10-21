@@ -93,7 +93,26 @@ def edit(db, id, data, actor):
     issue = issue_access(db, id, actor)
     project = project_access(db, issue.project_id, actor, lock=True)
     db.refresh(issue)
+    apply(db, project, issue, data.model_dump(exclude_unset=True), actor)
+    db.commit()
+    return issue
+
+
+def bulk_edit(db, ids, data, actor):
+    """Apply the same change to several issues; all succeed or none do."""
     values = data.model_dump(exclude_unset=True)
+    changed = []
+    for id in dict.fromkeys(ids):
+        issue = issue_access(db, id, actor)
+        project = project_access(db, issue.project_id, actor, lock=True)
+        db.refresh(issue)
+        apply(db, project, issue, dict(values), actor)
+        changed.append(issue)
+    db.commit()
+    return changed
+
+
+def apply(db, project, issue, values, actor):
     for key in (
         "summary",
         "description",
@@ -106,10 +125,17 @@ def edit(db, id, data, actor):
         if key in values and values[key] is None:
             raise HTTPException(422, f"{key} cannot be null")
     validate_links(db, project, values, issue)
+    # Work taken out of a sprint goes back to the backlog unless it has started.
+    if (
+        "sprint_id" in values
+        and values["sprint_id"] is None
+        and issue.sprint_id is not None
+        and "status" not in values
+        and issue.status == "TODO"
+    ):
+        values["status"] = "BACKLOG"
     for key, value in values.items():
         old = getattr(issue, key)
         if old != value:
             record(db, actor, project.id, issue.id, "changed", key, old, value)
             setattr(issue, key, value)
-    db.commit()
-    return issue

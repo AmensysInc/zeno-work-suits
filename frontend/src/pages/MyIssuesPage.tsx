@@ -21,7 +21,7 @@ export default function MyIssuesPage() {
       />
       <section className="card">
         <State loading={query.isLoading} error={query.error} />
-        {query.data && <IssueTable issues={query.data} />}
+        {query.data && <IssueTable issues={query.data} showProject />}
       </section>
     </>
   );
