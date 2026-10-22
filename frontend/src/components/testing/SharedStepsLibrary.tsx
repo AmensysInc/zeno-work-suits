@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { Alert, Card, Input, Table } from 'antd';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useData, useSave } from '../../hooks/data';
 import type { SharedStep } from '../../types';
 import { Field, State } from '../ui/shared';
 import { Button } from '../ui/button';
 import { Modal } from '../ui/dialog';
+import { confirm } from '../ui/confirm';
 
 function StepEditor({
   projectId,
@@ -40,13 +43,14 @@ function StepEditor({
         }}
       >
         {!!step?.usage_count && (
-          <p className="linked-context">
-            Used in {step.usage_count} test case
-            {step.usage_count === 1 ? '' : 's'}. Saving updates all of them.
-          </p>
+          <Alert
+            className="linked-context"
+            type="info"
+            title={`Used in ${step.usage_count} test case${step.usage_count === 1 ? '' : 's'}. Saving updates all of them.`}
+          />
         )}
         <Field label="Name">
-          <input
+          <Input
             name="title"
             required
             maxLength={200}
@@ -54,14 +58,24 @@ function StepEditor({
           />
         </Field>
         <Field label="Action">
-          <textarea name="action" required defaultValue={step?.action} />
+          <Input.TextArea
+            name="action"
+            required
+            autoSize={{ minRows: 2 }}
+            defaultValue={step?.action}
+          />
         </Field>
         <Field label="Test data">
-          <textarea name="test_data" defaultValue={step?.test_data} />
+          <Input.TextArea
+            name="test_data"
+            autoSize={{ minRows: 2 }}
+            defaultValue={step?.test_data}
+          />
         </Field>
         <Field label="Expected result">
-          <textarea
+          <Input.TextArea
             name="expected_result"
+            autoSize={{ minRows: 2 }}
             defaultValue={step?.expected_result}
           />
         </Field>
@@ -69,7 +83,7 @@ function StepEditor({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={save.isPending}>
+          <Button type="submit" loading={save.isPending}>
             Save step
           </Button>
         </div>
@@ -87,20 +101,22 @@ function DeleteStep({ step }: { step: SharedStep }) {
   return (
     <Button
       variant="ghost"
+      size="small"
+      icon={<DeleteOutlined />}
+      aria-label={`Delete ${step.title}`}
       disabled={del.isPending}
-      onClick={() => {
+      onClick={async () => {
         if (
-          window.confirm(
+          await confirm(
             step.usage_count
               ? `Delete "${step.title}"? The ${step.usage_count} test case(s) using it keep their own copy.`
               : `Delete "${step.title}"?`,
+            { okText: 'Delete' },
           )
         )
           del.mutate({});
       }}
-    >
-      Delete
-    </Button>
+    />
   );
 }
 
@@ -113,57 +129,67 @@ export default function SharedStepsLibrary({
   const [editing, setEditing] = useState<SharedStep | 'new' | null>(null);
   const items = query.data ?? [];
   return (
-    <section className="card">
-      <div className="section-head">
-        <div>
-          <h2>Reusable steps</h2>
-          <p className="muted">
-            Write common steps once, such as signing in, and insert them into
-            any test case. Edits apply everywhere they are used.
-          </p>
-        </div>
-        <Button onClick={() => setEditing('new')}>+ New reusable step</Button>
-      </div>
+    <Card
+      className="card"
+      title="Reusable steps"
+      extra={
+        <Button icon={<PlusOutlined />} onClick={() => setEditing('new')}>
+          New reusable step
+        </Button>
+      }
+    >
+      <p className="muted section-intro">
+        Write common steps once, such as signing in, and insert them into any
+        test case. Edits apply everywhere they are used.
+      </p>
       <State
         loading={query.isLoading}
         error={query.error}
         empty={!query.isLoading && !items.length}
       />
       {!!items.length && (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Action</th>
-                <th>Test data</th>
-                <th>Expected result</th>
-                <th>Used in</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((s) => (
-                <tr key={s.id}>
-                  <td>
-                    <button className="link" onClick={() => setEditing(s)}>
-                      {s.title}
-                    </button>
-                  </td>
-                  <td className="wrap">{s.action}</td>
-                  <td className="wrap muted">{s.test_data || '—'}</td>
-                  <td className="wrap">{s.expected_result || '—'}</td>
-                  <td className="muted">
-                    {s.usage_count} test{s.usage_count === 1 ? '' : 's'}
-                  </td>
-                  <td>
-                    <DeleteStep step={s} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          rowKey="id"
+          size="middle"
+          pagination={false}
+          scroll={{ x: 'max-content' }}
+          dataSource={items}
+          columns={[
+            {
+              title: 'Name',
+              dataIndex: 'title',
+              render: (title, s) => (
+                <Button
+                  variant="ghost"
+                  size="small"
+                  className="link"
+                  onClick={() => setEditing(s)}
+                >
+                  {title}
+                </Button>
+              ),
+            },
+            { title: 'Action', dataIndex: 'action', className: 'wrap' },
+            {
+              title: 'Test data',
+              dataIndex: 'test_data',
+              className: 'wrap muted',
+              render: (v) => v || '—',
+            },
+            {
+              title: 'Expected result',
+              dataIndex: 'expected_result',
+              className: 'wrap',
+              render: (v) => v || '—',
+            },
+            {
+              title: 'Used in',
+              dataIndex: 'usage_count',
+              render: (n) => `${n} test${n === 1 ? '' : 's'}`,
+            },
+            { key: 'delete', render: (_, s) => <DeleteStep step={s} /> },
+          ]}
+        />
       )}
       {editing && (
         <StepEditor
@@ -172,6 +198,6 @@ export default function SharedStepsLibrary({
           onClose={() => setEditing(null)}
         />
       )}
-    </section>
+    </Card>
   );
 }

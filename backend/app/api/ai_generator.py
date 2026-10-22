@@ -3,6 +3,7 @@ from app.api.deps import DB, Actor
 from app.core.config import settings
 from app.schemas.ai_generator import (
     ModuleOut,
+    PullModuleOut,
     GenerateIn,
     GeneratedDraft,
     SaveGeneratedIn,
@@ -26,6 +27,13 @@ def status(actor: Actor):
 @router.get("/projects/{project_id}/modules", response_model=list[ModuleOut])
 def modules(project_id: int, db: DB, actor: Actor):
     return ai_generator.modules(db, actor, project_id)
+
+
+@router.get(
+    "/projects/{project_id}/pulls/{number}/module", response_model=PullModuleOut
+)
+def pull_module(project_id: int, number: int, db: DB, actor: Actor):
+    return ai_generator.pull_module(db, actor, project_id, number)
 
 
 @router.post("/generate", response_model=GeneratedDraft)

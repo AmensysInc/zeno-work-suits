@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react';
+import { Select, Typography } from 'antd';
 import { useSave } from '../../hooks/data';
 import {
   label,
@@ -36,75 +36,57 @@ export default function BulkActions({
       /* toast */
     }
   };
+  // Each picker is an action, not a setting: it never keeps a value.
   const pick =
     (field: keyof Issue, numeric = false) =>
-    (e: ChangeEvent<HTMLSelectElement>) => {
-      const v = e.target.value;
-      e.target.value = '';
-      if (!v) return;
+    (v: string) =>
       apply({
         [field]: v === 'none' ? null : numeric ? Number(v) : v,
       } as Partial<Issue>);
-    };
+  const picker = (
+    name: string,
+    placeholder: string,
+    onChange: (v: string) => void,
+    options: { value: string; label: string }[],
+  ) => (
+    <Select
+      aria-label={name}
+      placeholder={placeholder}
+      value={null}
+      disabled={save.isPending}
+      onChange={onChange}
+      options={options}
+      popupMatchSelectWidth={false}
+    />
+  );
   return (
     <div className="bulk-bar" role="region" aria-label="Bulk actions">
-      <strong>{ids.length} selected</strong>
-      <select
-        aria-label="Move selected to sprint"
-        defaultValue=""
-        disabled={save.isPending}
-        onChange={pick('sprint_id', true)}
-      >
-        <option value="">Move to…</option>
-        <option value="none">Backlog</option>
-        {sprints
+      <Typography.Text strong>{ids.length} selected</Typography.Text>
+      {picker('Move selected to sprint', 'Move to…', pick('sprint_id', true), [
+        { value: 'none', label: 'Backlog' },
+        ...sprints
           .filter((s) => s.status !== 'COMPLETED')
-          .map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-      </select>
-      <select
-        aria-label="Assign selected"
-        defaultValue=""
-        disabled={save.isPending}
-        onChange={pick('assignee_id', true)}
-      >
-        <option value="">Assign to…</option>
-        <option value="none">Unassigned</option>
-        {members.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.first_name} {u.last_name}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="Set priority of selected"
-        defaultValue=""
-        disabled={save.isPending}
-        onChange={pick('priority')}
-      >
-        <option value="">Priority…</option>
-        {priorities.map((p) => (
-          <option key={p} value={p}>
-            {label(p)}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="Set status of selected"
-        defaultValue=""
-        disabled={save.isPending}
-        onChange={pick('status')}
-      >
-        <option value="">Status…</option>
-        {statuses.map((s) => (
-          <option key={s} value={s}>
-            {label(s)}
-          </option>
-        ))}
-      </select>
+          .map((s) => ({ value: String(s.id), label: s.name })),
+      ])}
+      {picker('Assign selected', 'Assign to…', pick('assignee_id', true), [
+        { value: 'none', label: 'Unassigned' },
+        ...members.map((u) => ({
+          value: String(u.id),
+          label: `${u.first_name} ${u.last_name}`,
+        })),
+      ])}
+      {picker(
+        'Set priority of selected',
+        'Priority…',
+        pick('priority'),
+        priorities.map((p) => ({ value: p, label: label(p) })),
+      )}
+      {picker(
+        'Set status of selected',
+        'Status…',
+        pick('status'),
+        statuses.map((s) => ({ value: s, label: label(s) })),
+      )}
       <Button variant="ghost" onClick={onDone}>
         Clear selection
       </Button>

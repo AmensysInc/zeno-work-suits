@@ -1,4 +1,6 @@
+import { Input } from 'antd';
 import { Field } from '../ui/shared';
+import { DateInput } from '../ui/form';
 import { projectDates, type Project } from '../../types';
 
 export const GITHUB_REPO = 'https://github\\.com/[\\w.\\-]+/[\\w.\\-]+/?';
@@ -10,16 +12,12 @@ export default function ProjectFields({ project }: { project?: Project }) {
       <div className="form-grid">
         {projectDates.map(([name, title]) => (
           <Field label={title} key={name}>
-            <input
-              name={name}
-              type="date"
-              defaultValue={project?.[name] ?? ''}
-            />
+            <DateInput name={name} defaultValue={project?.[name]} />
           </Field>
         ))}
       </div>
       <Field label="GitHub repository">
-        <input
+        <Input
           name="github_repo"
           type="url"
           inputMode="url"

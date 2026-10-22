@@ -1,7 +1,14 @@
+import { Card, Checkbox, Input, Typography } from 'antd';
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons';
 import { useData, useSave } from '../../hooks/data';
 import type { Criterion } from '../../types';
 import { State } from '../ui/shared';
 import { Button } from '../ui/button';
+import { confirm } from '../ui/confirm';
 function Row({
   item,
   onMove,
@@ -21,49 +28,51 @@ function Row({
   );
   return (
     <div className="criterion">
-      <input
-        type="checkbox"
+      <Checkbox
         aria-label={item.description}
         checked={item.completed}
         disabled={save.isPending}
         onChange={(e) => save.mutate({ ...item, completed: e.target.checked })}
       />
-      <span className={item.completed ? 'checked' : ''}>
+      <Typography.Text
+        className={item.completed ? 'checked' : ''}
+        editable={{
+          tooltip: 'Edit acceptance criterion',
+          onChange: (description) => {
+            if (description.trim() && description !== item.description)
+              save.mutate({ ...item, description });
+          },
+        }}
+      >
         {item.description}
-      </span>
+      </Typography.Text>
       <div className="actions">
-        <button
+        <Button
+          variant="ghost"
+          size="small"
+          icon={<ArrowUpOutlined />}
           aria-label="Move criterion up"
           disabled={first}
           onClick={() => onMove(-1)}
-        >
-          ↑
-        </button>
-        <button
+        />
+        <Button
+          variant="ghost"
+          size="small"
+          icon={<ArrowDownOutlined />}
           aria-label="Move criterion down"
           disabled={last}
           onClick={() => onMove(1)}
-        >
-          ↓
-        </button>
-        <button
-          onClick={() => {
-            const description = window.prompt(
-              'Edit acceptance criterion',
-              item.description,
-            );
-            if (description?.trim()) save.mutate({ ...item, description });
+        />
+        <Button
+          variant="ghost"
+          size="small"
+          icon={<DeleteOutlined />}
+          aria-label="Delete criterion"
+          onClick={async () => {
+            if (await confirm('Delete this criterion?', { okText: 'Delete' }))
+              del.mutate({});
           }}
-        >
-          Edit
-        </button>
-        <button
-          onClick={() => {
-            if (window.confirm('Delete this criterion?')) del.mutate({});
-          }}
-        >
-          ×
-        </button>
+        />
       </div>
     </div>
   );
@@ -75,13 +84,15 @@ export default function AcceptanceCriteria({ issueId }: { issueId: number }) {
   const reorder = useSave('/acceptance-criteria/reorder', 'post');
   const items = query.data ?? [];
   return (
-    <section className="card">
-      <h2>
-        Acceptance criteria{' '}
-        <span className="muted">
-          {items.filter((c) => c.completed).length}/{items.length}
-        </span>
-      </h2>
+    <Card
+      className="card"
+      title="Acceptance criteria"
+      extra={
+        <Typography.Text type="secondary">
+          {items.filter((c) => c.completed).length}/{items.length} done
+        </Typography.Text>
+      }
+    >
       <State loading={query.isLoading} error={query.error} />
       {items.map((c, index) => (
         <Row
@@ -115,16 +126,16 @@ export default function AcceptanceCriteria({ issueId }: { issueId: number }) {
           }
         }}
       >
-        <input
+        <Input
           name="description"
           required
           aria-label="New acceptance criterion"
           placeholder="Add an acceptance criterion…"
         />
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" loading={save.isPending}>
           Add
         </Button>
       </form>
-    </section>
+    </Card>
   );
 }

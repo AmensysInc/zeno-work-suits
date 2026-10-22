@@ -1,13 +1,15 @@
 from typing import Literal
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from app.api.deps import DB, Actor
 from app.core.config import settings
 from app.schemas.github import (
+    BRANCH,
     RepoOut,
     LinkIn,
     BranchesOut,
     BranchIn,
     BranchOut,
+    CommitOut,
     PullOut,
     PullIn,
     MergeIn,
@@ -60,6 +62,16 @@ def pulls(
     state: Literal["open", "closed", "all"] = "open",
 ):
     return github.pulls(db, project_id, state, actor)
+
+
+@router.get("/projects/{project_id}/commits", response_model=list[CommitOut])
+def commits(
+    project_id: int,
+    db: DB,
+    actor: Actor,
+    branch: str | None = Query(default=None, max_length=200, pattern=BRANCH),
+):
+    return github.commits(db, project_id, branch, actor)
 
 
 @router.post("/projects/{project_id}/pulls", response_model=PullOut, status_code=201)

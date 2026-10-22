@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { Avatar, Checkbox } from 'antd';
 import { useData, useSave } from '../../hooks/data';
 import { Modal } from '../ui/dialog';
 import { Field } from '../ui/shared';
 import { Button } from '../ui/button';
+import { Select, labelled } from '../ui/form';
 import {
   label,
   projectRoles,
@@ -47,32 +49,24 @@ export default function AssignTeamModal({
         }}
       >
         <Field label="Project">
-          <select
-            required
-            value={projectId ?? ''}
-            onChange={(e) => {
-              setProjectId(Number(e.target.value));
+          <Select
+            value={projectId}
+            onChange={(v) => {
+              setProjectId(Number(v));
               setChosen([]);
             }}
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} · {p.key}
-              </option>
-            ))}
-          </select>
+            options={projects.map((p) => ({
+              value: p.id,
+              label: `${p.name} · ${p.key}`,
+            }))}
+          />
         </Field>
         <Field label="Role on this project">
-          <select
+          <Select
             value={role}
-            onChange={(e) => setRole(e.target.value as ProjectRole)}
-          >
-            {projectRoles.map((r) => (
-              <option key={r} value={r}>
-                {label(r)}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setRole(v as ProjectRole)}
+            options={labelled(projectRoles)}
+          />
         </Field>
         <fieldset className="field">
           <span>Team members · {chosen.length} selected</span>
@@ -85,15 +79,14 @@ export default function AssignTeamModal({
               ?.filter((u) => u.id !== project?.owner_id)
               .map((u) => (
                 <label className="check-row" key={u.id}>
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={chosen.includes(u.id)}
                     onChange={() => toggle(u.id)}
                   />
-                  <span className="mini-avatar">
+                  <Avatar size={24} className="mini-avatar">
                     {u.first_name[0]}
                     {u.last_name[0]}
-                  </span>
+                  </Avatar>
                   <span>
                     {u.first_name} {u.last_name}
                   </span>

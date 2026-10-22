@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { Avatar, Card, Typography } from 'antd';
+import { UserAddOutlined } from '@ant-design/icons';
 import { useData, useMe, useSave } from '../hooks/data';
 import { Badge, PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
+import { Select, labelled } from '../components/ui/form';
 import AddPersonModal from '../components/people/AddPersonModal';
-import { label, roles, type Role, type User } from '../types';
+import { roles, type Role, type User } from '../types';
 
 function PersonRow({ user }: { user: User }) {
   const save = useSave<{ role: Role }>(
@@ -13,27 +16,25 @@ function PersonRow({ user }: { user: User }) {
   );
   return (
     <div className="list-row">
-      <span className="mini-avatar">
+      <Avatar size={32} className="mini-avatar">
         {user.first_name[0]}
         {user.last_name[0]}
-      </span>
-      <strong>
-        {user.first_name} {user.last_name}
-      </strong>
-      <span className="muted">{user.email}</span>
+      </Avatar>
+      <div className="member-name">
+        <Typography.Text strong>
+          {user.first_name} {user.last_name}
+        </Typography.Text>
+        <Typography.Text type="secondary">{user.email}</Typography.Text>
+      </div>
       <Badge value={user.role} />
-      <select
+      <Select
+        className="role-select"
         aria-label={`Role for ${user.first_name} ${user.last_name}`}
         value={user.role}
         disabled={save.isPending}
-        onChange={(e) => save.mutate({ role: e.target.value as Role })}
-      >
-        {roles.map((role) => (
-          <option key={role} value={role}>
-            {label(role)}
-          </option>
-        ))}
-      </select>
+        onChange={(v) => save.mutate({ role: v as Role })}
+        options={labelled(roles)}
+      />
     </div>
   );
 }
@@ -57,10 +58,12 @@ export default function PeoplePage() {
         title="People"
         description="Admin can open every project. Managers run the projects they own. Employees work inside the projects they belong to."
       >
-        <Button onClick={() => setAdding(true)}>+ Add person</Button>
+        <Button icon={<UserAddOutlined />} onClick={() => setAdding(true)}>
+          Add person
+        </Button>
       </PageHeader>
       {adding && <AddPersonModal onClose={() => setAdding(false)} />}
-      <section className="card">
+      <Card className="card">
         <State
           loading={users.isLoading}
           error={users.error}
@@ -69,7 +72,7 @@ export default function PeoplePage() {
         {users.data?.map((user) => (
           <PersonRow key={user.id} user={user} />
         ))}
-      </section>
+      </Card>
     </>
   );
 }

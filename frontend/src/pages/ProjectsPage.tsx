@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Avatar, Card, Input, Typography } from 'antd';
+import { PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import { useMe, useProjects, useSave } from '../hooks/data';
 import { canCreateProjects, canManageProject, label } from '../types';
 import { PageHeader, State, Field, Badge } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
+import { Select } from '../components/ui/form';
 import ProjectFields from '../components/projects/ProjectFields';
 import AssignTeamModal from '../components/projects/AssignTeamModal';
 export default function ProjectsPage() {
@@ -41,12 +44,18 @@ export default function ProjectsPage() {
         description="A shared home for your team’s next big thing."
       >
         {manageable.length > 0 && (
-          <Button variant="outline" onClick={() => setAssigning(true)}>
+          <Button
+            variant="outline"
+            icon={<TeamOutlined />}
+            onClick={() => setAssigning(true)}
+          >
             Assign team member
           </Button>
         )}
         {canCreate && (
-          <Button onClick={() => setOpen(true)}>+ Create project</Button>
+          <Button icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+            Create project
+          </Button>
         )}
       </PageHeader>
       <State
@@ -56,8 +65,8 @@ export default function ProjectsPage() {
       />
       {(query.data?.length ?? 0) > 0 && (
         <div className="project-toolbar">
-          <input
-            type="search"
+          <Input.Search
+            allowClear
             aria-label="Search projects"
             placeholder="Search projects by name, key, status or member..."
             value={search}
@@ -75,29 +84,31 @@ export default function ProjectsPage() {
         {projects.map((p) => {
           const mine = p.team.find((m) => m.user.id === me.data?.id);
           return (
-            <Link
-              className="card project-card"
-              key={p.id}
-              to={`/projects/${p.id}`}
-            >
-              <div className="section-head">
-                <span className="project-icon">{p.key.slice(0, 2)}</span>
-                <Badge value={p.status} />
-              </div>
-              <h2>{p.name}</h2>
-              <p>{p.description || 'No description yet.'}</p>
-              {(p.start_date || p.end_date || mine) && (
-                <p className="muted project-meta">
-                  {mine && <>Your role: {label(mine.role)}</>}
-                  {mine && (p.start_date || p.end_date) && ' · '}
-                  {(p.start_date || p.end_date) &&
-                    `${p.start_date ?? '…'} → ${p.end_date ?? '…'}`}
-                </p>
-              )}
-              <div className="project-bottom">
-                <span>{p.key}</span>
-                <span>{p.members.length} members →</span>
-              </div>
+            <Link key={p.id} to={`/projects/${p.id}`}>
+              <Card hoverable className="card project-card">
+                <div className="section-head">
+                  <Avatar shape="square" size={42} className="project-icon">
+                    {p.key.slice(0, 2)}
+                  </Avatar>
+                  <Badge value={p.status} />
+                </div>
+                <Typography.Title level={4}>{p.name}</Typography.Title>
+                <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }}>
+                  {p.description || 'No description yet.'}
+                </Typography.Paragraph>
+                {(p.start_date || p.end_date || mine) && (
+                  <p className="muted project-meta">
+                    {mine && <>Your role: {label(mine.role)}</>}
+                    {mine && (p.start_date || p.end_date) && ' · '}
+                    {(p.start_date || p.end_date) &&
+                      `${p.start_date ?? '…'} → ${p.end_date ?? '…'}`}
+                  </p>
+                )}
+                <div className="project-bottom">
+                  <span>{p.key}</span>
+                  <span>{p.members.length} members →</span>
+                </div>
+              </Card>
             </Link>
           );
         })}
@@ -122,10 +133,10 @@ export default function ProjectsPage() {
           }}
         >
           <Field label="Project name">
-            <input name="name" required maxLength={200} />
+            <Input name="name" required maxLength={200} />
           </Field>
           <Field label="Key · 2–10 uppercase letters or numbers">
-            <input
+            <Input
               name="key"
               required
               pattern="[A-Z][A-Z0-9]{1,9}"
@@ -134,20 +145,24 @@ export default function ProjectsPage() {
             />
           </Field>
           <Field label="Description">
-            <textarea name="description" />
+            <Input.TextArea name="description" rows={3} />
           </Field>
           <ProjectFields />
           <Field label="Board">
-            <select name="board_type" defaultValue="SCRUM">
-              <option value="SCRUM">Scrum · plan work in sprints</option>
-              <option value="KANBAN">Kanban · continuous flow</option>
-            </select>
+            <Select
+              name="board_type"
+              defaultValue="SCRUM"
+              options={[
+                { value: 'SCRUM', label: 'Scrum · plan work in sprints' },
+                { value: 'KANBAN', label: 'Kanban · continuous flow' },
+              ]}
+            />
           </Field>
           <div className="form-footer actions">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={save.isPending}>
+            <Button type="submit" loading={save.isPending}>
               Create project
             </Button>
           </div>

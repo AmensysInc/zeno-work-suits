@@ -1,5 +1,6 @@
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from app.schemas.github import BRANCH, git_branch
 from app.schemas.issue import Priority
 
 OutputType = Literal["USER_STORIES", "TEST_CASES", "BOTH"]
@@ -16,11 +17,24 @@ class ModuleOut(BaseModel):
     file_count: int
 
 
+class PullModuleOut(BaseModel):
+    module_path: str
+    changed_files: int
+    matched_files: int
+
+
 class GenerateIn(BaseModel):
     project_id: int
     module_path: str = ""
+    # Empty reads the repository's default branch.
+    branch: str = Field(default="", max_length=200, pattern=r"^$|" + BRANCH)
     output_type: OutputType = "BOTH"
     coverage: list[CoverageType] = Field(default_factory=lambda: ["POSITIVE"])
+
+    @field_validator("branch")
+    @classmethod
+    def _branch(cls, value):
+        return git_branch(value) if value else value
 
 
 class GeneratedStep(BaseModel):

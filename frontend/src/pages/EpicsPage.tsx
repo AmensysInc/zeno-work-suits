@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Card, Checkbox, Progress as Meter, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { useIssues } from '../hooks/data';
 import { label, statuses, type Issue } from '../types';
 import { fullName, percent } from '../lib/qa';
@@ -16,20 +18,24 @@ function EpicCard({ epic, items }: { epic: Issue; items: Issue[] }) {
   const points = items.reduce((n, i) => n + i.story_points, 0);
   const donePoints = done.reduce((n, i) => n + i.story_points, 0);
   return (
-    <section className="card epic-card">
+    <Card className="card epic-card">
       <div className="section-head">
         <div>
-          <p className="key">
+          <Typography.Text type="secondary" className="key">
             <Link to={`/issues/${epic.id}`}>{epic.issue_key}</Link> ·{' '}
             {label(epic.priority)} priority · {fullName(epic.assignee)}
-          </p>
-          <h2 className="epic">
+          </Typography.Text>
+          <Typography.Title level={4} className="epic">
             <Link to={`/issues/${epic.id}`}>{epic.summary}</Link>
-          </h2>
+          </Typography.Title>
         </div>
         <div className="actions">
           <Badge value={epic.status} />
-          <strong>{percent(done.length, items.length)}%</strong>
+          <Meter
+            type="circle"
+            size={44}
+            percent={percent(done.length, items.length)}
+          />
         </div>
       </div>
       <Progress
@@ -39,14 +45,15 @@ function EpicCard({ epic, items }: { epic: Issue; items: Issue[] }) {
         }))}
       />
       <div className="section-head">
-        <span className="muted">
+        <Typography.Text type="secondary">
           {done.length} of {items.length} items done · {donePoints} of {points}{' '}
           points
           {epic.due_date && ` · due ${epic.due_date}`}
-        </span>
+        </Typography.Text>
         <div className="actions">
           <Button
             variant="ghost"
+            icon={<PlusOutlined />}
             onClick={() =>
               create({
                 project_id: epic.project_id,
@@ -55,7 +62,7 @@ function EpicCard({ epic, items }: { epic: Issue; items: Issue[] }) {
               })
             }
           >
-            + Add story
+            Add story
           </Button>
           <Button variant="outline" onClick={() => setOpen(!open)}>
             {open ? 'Hide items' : `Show ${items.length} items`}
@@ -63,7 +70,7 @@ function EpicCard({ epic, items }: { epic: Issue; items: Issue[] }) {
         </div>
       </div>
       {open && <IssueTable issues={items} />}
-    </section>
+    </Card>
   );
 }
 
@@ -85,18 +92,20 @@ export default function EpicsPage() {
         title="Epics"
         description="Large bodies of work and how far each one has come."
       >
-        <Button onClick={() => create({ project_id: pid, issue_type: 'EPIC' })}>
-          + Create epic
+        <Button
+          icon={<PlusOutlined />}
+          onClick={() => create({ project_id: pid, issue_type: 'EPIC' })}
+        >
+          Create epic
         </Button>
       </PageHeader>
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={hideDone}
-          onChange={(e) => setHideDone(e.target.checked)}
-        />
+      <Checkbox
+        className="check-row"
+        checked={hideDone}
+        onChange={(e) => setHideDone(e.target.checked)}
+      >
         Hide completed epics
-      </label>
+      </Checkbox>
       <State
         loading={query.isLoading}
         error={query.error}

@@ -1,5 +1,11 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Card as Panel, Empty, Input, Tag, Typography } from 'antd';
+import {
+  BugOutlined,
+  CaretRightOutlined,
+  HolderOutlined,
+} from '@ant-design/icons';
 import {
   DndContext,
   KeyboardSensor,
@@ -26,6 +32,7 @@ import {
 import { fullName, isOpen, percent } from '../lib/qa';
 import { PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
+import { Select } from '../components/ui/form';
 import { Kpi, Progress } from '../components/ui/charts';
 import RunTestModal from '../components/testing/RunTestModal';
 
@@ -61,7 +68,7 @@ function Card({ item, onRun }: { item: Item; onRun: () => void }) {
           {...listeners}
           aria-label={`Drag ${test.test_case_key} to record a result`}
         >
-          ⠿
+          <HolderOutlined />
         </button>
       </div>
       <Link className="card-summary" to={`/test-cases/${test.id}`}>
@@ -73,17 +80,28 @@ function Card({ item, onRun }: { item: Item; onRun: () => void }) {
         </Link>
       )}
       <div className="card-meta">
-        <span className="muted">
+        <Typography.Text type="secondary">
           {run ? `${run.executed_on} · ${fullName(run.tester)}` : 'Not run yet'}
-        </span>
+        </Typography.Text>
         {bugs.length > 0 && (
-          <span className="error" title="Open defects from this test">
-            🐞 {bugs.length}
-          </span>
+          <Tag
+            color="error"
+            icon={<BugOutlined />}
+            title="Open defects from this test"
+          >
+            {bugs.length}
+          </Tag>
         )}
       </div>
-      <Button variant="outline" className="card-run" onClick={onRun}>
-        ▶ Run
+      <Button
+        variant="outline"
+        size="small"
+        block
+        icon={<CaretRightOutlined />}
+        className="card-run"
+        onClick={onRun}
+      >
+        Run
       </Button>
     </article>
   );
@@ -212,22 +230,19 @@ export default function QaBoardPage() {
             : 'Latest result of every test case in the project'
         }
       >
-        <select
+        <Select
           aria-label="Test cycle"
+          className="inline-select"
           value={sprintId}
-          onChange={(e) =>
-            setScope(e.target.value === 'all' ? 'all' : Number(e.target.value))
-          }
-        >
-          {sprints.data?.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-              {s.status === 'ACTIVE' ? ' (active)' : ''}
-              {s.status === 'COMPLETED' ? ' (completed)' : ''}
-            </option>
-          ))}
-          <option value="all">All tests (latest run)</option>
-        </select>
+          onChange={(v) => setScope(v === 'all' ? 'all' : Number(v))}
+          options={[
+            ...(sprints.data ?? []).map((s) => ({
+              value: s.id,
+              label: `${s.name}${s.status === 'ACTIVE' ? ' (active)' : ''}${s.status === 'COMPLETED' ? ' (completed)' : ''}`,
+            })),
+            { value: 'all', label: 'All tests (latest run)' },
+          ]}
+        />
       </PageHeader>
       <State
         loading={loading}
@@ -256,33 +271,33 @@ export default function QaBoardPage() {
               tone={count('FAILED') + count('BLOCKED') ? 'bad' : 'good'}
             />
           </div>
-          <section className="card">
+          <Panel className="card">
             <Progress
               rows={testStatuses.map((s) => ({ key: s, count: count(s) }))}
             />
-          </section>
+          </Panel>
           <div className="filters">
-            <input
-              type="search"
+            <Input.Search
+              allowClear
               aria-label="Search tests"
               placeholder="Search tests…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <select
+            <Select
               aria-label="Filter by story"
               value={story}
-              onChange={(e) => setStory(Number(e.target.value))}
-            >
-              <option value={0}>All stories</option>
-              {[...stories.values()]
-                .filter((s) => items.some((i) => i.test.issue_id === s.id))
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.issue_key} — {s.summary}
-                  </option>
-                ))}
-            </select>
+              onChange={(v) => setStory(Number(v))}
+              options={[
+                { value: 0, label: 'All stories' },
+                ...[...stories.values()]
+                  .filter((s) => items.some((i) => i.test.issue_id === s.id))
+                  .map((s) => ({
+                    value: s.id,
+                    label: `${s.issue_key} — ${s.summary}`,
+                  })),
+              ]}
+            />
           </div>
           {items.length ? (
             <DndContext sensors={sensors} onDragEnd={end}>
@@ -298,12 +313,18 @@ export default function QaBoardPage() {
               </div>
             </DndContext>
           ) : (
-            <section className="card empty">
-              <h2>No tests in this cycle</h2>
-              <p>
-                Add stories with test cases to the sprint, or pick “All tests”.
-              </p>
-            </section>
+            <Panel className="card">
+              <Empty
+                description={
+                  <>
+                    <strong>No tests in this cycle</strong>
+                    <br />
+                    Add stories with test cases to the sprint, or pick “All
+                    tests”.
+                  </>
+                }
+              />
+            </Panel>
           )}
         </>
       )}

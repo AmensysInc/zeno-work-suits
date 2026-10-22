@@ -2,12 +2,22 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Card, Checkbox, Input, Tag, Typography } from 'antd';
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import { useData, useIssues, useSave } from '../../hooks/data';
 import { api, errorMessage } from '../../services/api';
 import type { Criterion, SharedStep, TestCase, TestStep } from '../../types';
-import { priorities, testTypes, label } from '../../types';
+import { priorities, testTypes } from '../../types';
 import { Field, State } from '../ui/shared';
 import { Button } from '../ui/button';
+import { Select, labelled } from '../ui/form';
+import { confirm, prompt } from '../ui/confirm';
 type Editable = 'action' | 'test_data' | 'expected_result';
 const blank = (): TestStep => ({
   step_number: 0,
@@ -66,7 +76,7 @@ export default function TestCaseForm({
   async function makeReusable(index: number) {
     const step = steps[index];
     if (!story || !step.action.trim()) return;
-    const title = window.prompt('Name this reusable step', step.action);
+    const title = await prompt('Name this reusable step', step.action);
     if (!title) return;
     try {
       const { data } = await api.post<SharedStep>('/shared-steps', {
@@ -90,7 +100,7 @@ export default function TestCaseForm({
     }
   }
   return (
-    <section className="card test-form">
+    <Card className="card test-form">
       <State loading={issues.isLoading} error={issues.error} />
       <form
         onSubmit={async (e) => {
@@ -121,28 +131,26 @@ export default function TestCaseForm({
         }}
       >
         <Field label="Linked story">
-          <select
+          <Select
             required
+            placeholder="Select a story"
             value={selected || ''}
             disabled={!!initial}
-            onChange={(e) => {
-              setSelected(Number(e.target.value));
+            onChange={(v) => {
+              setSelected(Number(v));
               setCovers([]);
               setSteps((items) => items.filter((s) => !s.shared_step_id));
             }}
-          >
-            <option value="">Select a story</option>
-            {issues.data
-              ?.filter((i) => i.issue_type === 'STORY')
-              .map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.issue_key} — {i.summary}
-                </option>
-              ))}
-          </select>
+            options={(issues.data ?? [])
+              .filter((i) => i.issue_type === 'STORY')
+              .map((i) => ({
+                value: i.id,
+                label: `${i.issue_key} — ${i.summary}`,
+              }))}
+          />
         </Field>
         <Field label="Title">
-          <input
+          <Input
             name="title"
             required
             maxLength={300}
@@ -151,28 +159,18 @@ export default function TestCaseForm({
         </Field>
         <div className="form-grid">
           <Field label="Type">
-            <select
+            <Select
               name="test_type"
               defaultValue={initial?.test_type ?? 'FUNCTIONAL'}
-            >
-              {testTypes.map((t) => (
-                <option key={t} value={t}>
-                  {label(t)}
-                </option>
-              ))}
-            </select>
+              options={labelled(testTypes)}
+            />
           </Field>
           <Field label="Priority">
-            <select
+            <Select
               name="priority"
               defaultValue={initial?.priority ?? 'MEDIUM'}
-            >
-              {priorities.map((t) => (
-                <option value={t} key={t}>
-                  {label(t)}
-                </option>
-              ))}
-            </select>
+              options={labelled(priorities)}
+            />
           </Field>
         </div>
         <fieldset className="criteria-pick">
@@ -181,20 +179,20 @@ export default function TestCaseForm({
             <p className="muted">Select a story to see its criteria.</p>
           ) : criteria.data?.length ? (
             criteria.data.map((c) => (
-              <label key={c.id} className="check-row">
-                <input
-                  type="checkbox"
-                  checked={covers.includes(c.id)}
-                  onChange={(e) =>
-                    setCovers(
-                      e.target.checked
-                        ? [...covers, c.id]
-                        : covers.filter((id) => id !== c.id),
-                    )
-                  }
-                />
+              <Checkbox
+                key={c.id}
+                className="check-row"
+                checked={covers.includes(c.id)}
+                onChange={(e) =>
+                  setCovers(
+                    e.target.checked
+                      ? [...covers, c.id]
+                      : covers.filter((id) => id !== c.id),
+                  )
+                }
+              >
                 {c.description}
-              </label>
+              </Checkbox>
             ))
           ) : (
             <p className="muted">
@@ -205,36 +203,37 @@ export default function TestCaseForm({
           )}
         </fieldset>
         <Field label="Preconditions">
-          <textarea
+          <Input.TextArea
             name="preconditions"
+            autoSize={{ minRows: 2 }}
             defaultValue={initial?.preconditions}
           />
         </Field>
         <div className="section-head">
-          <h3>Test steps</h3>
+          <Typography.Title level={5}>Test steps</Typography.Title>
           <div className="actions">
-            <select
+            <Select
               aria-label="Insert a reusable step"
-              value=""
-              disabled={!library.data?.length}
-              onChange={(e) => insertShared(Number(e.target.value))}
-            >
-              <option value="">
-                {library.data?.length
+              className="inline-select"
+              value={null}
+              placeholder={
+                library.data?.length
                   ? '+ Insert reusable step'
-                  : 'No reusable steps yet'}
-              </option>
-              {library.data?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.title}
-                </option>
-              ))}
-            </select>
+                  : 'No reusable steps yet'
+              }
+              disabled={!library.data?.length}
+              onChange={(v) => insertShared(Number(v))}
+              options={(library.data ?? []).map((s) => ({
+                value: s.id,
+                label: s.title,
+              }))}
+            />
             <Button
               variant="outline"
+              icon={<PlusOutlined />}
               onClick={() => setSteps([...steps, blank()])}
             >
-              + Add step
+              Add step
             </Button>
           </div>
         </div>
@@ -251,7 +250,7 @@ export default function TestCaseForm({
               {step.shared_step_id ? (
                 <div className="shared-body">
                   <p>
-                    <span className="chip">Reusable</span>
+                    <Tag color="blue">Reusable</Tag>
                     <strong>{shared?.title ?? step.action}</strong>
                   </p>
                   <p>{step.action}</p>
@@ -261,8 +260,9 @@ export default function TestCaseForm({
                   <p className="muted">
                     Expected: {step.expected_result || '—'}
                   </p>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="small"
                     className="link"
                     onClick={() =>
                       setSteps(
@@ -273,13 +273,14 @@ export default function TestCaseForm({
                     }
                   >
                     Unlink to edit a copy
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <>
                   <Field label="Action">
-                    <textarea
+                    <Input.TextArea
                       required
+                      autoSize={{ minRows: 2 }}
                       aria-label={`Step ${index + 1} action`}
                       value={step.action}
                       onChange={(e) =>
@@ -288,7 +289,8 @@ export default function TestCaseForm({
                     />
                   </Field>
                   <Field label="Test data">
-                    <textarea
+                    <Input.TextArea
+                      autoSize={{ minRows: 2 }}
                       aria-label={`Step ${index + 1} test data`}
                       value={step.test_data}
                       onChange={(e) =>
@@ -297,7 +299,8 @@ export default function TestCaseForm({
                     />
                   </Field>
                   <Field label="Expected result">
-                    <textarea
+                    <Input.TextArea
+                      autoSize={{ minRows: 2 }}
                       aria-label={`Step ${index + 1} expected result`}
                       value={step.expected_result}
                       onChange={(e) =>
@@ -308,55 +311,62 @@ export default function TestCaseForm({
                 </>
               )}
               <div className="step-actions">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="small"
+                  icon={<ArrowUpOutlined />}
                   aria-label={`Move step ${index + 1} up`}
                   disabled={index === 0}
                   onClick={() => move(index, -1)}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
+                />
+                <Button
+                  variant="ghost"
+                  size="small"
+                  icon={<ArrowDownOutlined />}
                   aria-label={`Move step ${index + 1} down`}
                   disabled={index === steps.length - 1}
                   onClick={() => move(index, 1)}
-                >
-                  ↓
-                </button>
+                />
                 {!step.shared_step_id && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    icon={<SaveOutlined />}
                     title="Save as reusable step"
                     aria-label={`Save step ${index + 1} as reusable`}
                     disabled={!story || !step.action.trim()}
                     onClick={() => makeReusable(index)}
-                  >
-                    ♻
-                  </button>
+                  />
                 )}
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="small"
+                  icon={<DeleteOutlined />}
                   aria-label={`Delete step ${index + 1}`}
-                  onClick={() => {
-                    if (window.confirm('Remove this step?'))
+                  onClick={async () => {
+                    if (
+                      await confirm('Remove this step?', { okText: 'Remove' })
+                    )
                       setSteps(steps.filter((_, i) => i !== index));
                   }}
-                >
-                  ×
-                </button>
+                />
               </div>
             </div>
           );
         })}
         <Field label="Expected result">
-          <textarea
+          <Input.TextArea
             name="expected_result"
+            autoSize={{ minRows: 2 }}
             defaultValue={initial?.expected_result}
           />
         </Field>
         <Field label="Test data">
-          <textarea name="test_data" defaultValue={initial?.test_data} />
+          <Input.TextArea
+            name="test_data"
+            autoSize={{ minRows: 2 }}
+            defaultValue={initial?.test_data}
+          />
         </Field>
         <div className="actions form-footer">
           <Button
@@ -365,11 +375,11 @@ export default function TestCaseForm({
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={save.isPending || !story}>
+          <Button type="submit" loading={save.isPending} disabled={!story}>
             Save test case
           </Button>
         </div>
       </form>
-    </section>
+    </Card>
   );
 }

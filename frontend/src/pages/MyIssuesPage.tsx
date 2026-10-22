@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
+import { Card } from 'antd';
 import { useData } from '../hooks/data';
 import type { Issue } from '../types';
 import { PageHeader, State } from '../components/ui/shared';
@@ -19,10 +20,10 @@ export default function MyIssuesPage() {
             : 'Your work, across every project.'
         }
       />
-      <section className="card">
+      <Card className="card">
         <State loading={query.isLoading} error={query.error} />
         {query.data && <IssueTable issues={query.data} showProject />}
-      </section>
+      </Card>
     </>
   );
 }
