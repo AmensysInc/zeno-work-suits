@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Card, Checkbox, Tabs, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { useData, useIssues } from '../hooks/data';
 import type { Project, Sprint } from '../types';
 import { PageHeader, State } from '../components/ui/shared';
-import { Button } from '../components/ui/button';
+import { Button, LinkButton } from '../components/ui/button';
 import { useCreateIssue } from '../components/layout/AppShell';
 import IssueTable from '../components/issues/IssueTable';
 import WorkItemFilters, {
@@ -67,42 +69,42 @@ export default function BacklogPage() {
         }
       >
         {!kanban && (
-          <Button variant="outline" onClick={() => setModal({ kind: 'new' })}>
-            + Create sprint
+          <Button
+            variant="outline"
+            icon={<PlusOutlined />}
+            onClick={() => setModal({ kind: 'new' })}
+          >
+            Create sprint
           </Button>
         )}
-        <Button onClick={() => create({ project_id: pid })}>
-          + Create issue
+        <Button
+          icon={<PlusOutlined />}
+          onClick={() => create({ project_id: pid })}
+        >
+          Create issue
         </Button>
       </PageHeader>
-      <div className="tabs">
-        <button
-          className={view === 'plan' ? 'selected' : ''}
-          onClick={() => setView('plan')}
-        >
-          {kanban ? 'Backlog' : 'Sprints & backlog'}
-        </button>
-        <button
-          className={view === 'epics' ? 'selected' : ''}
-          onClick={() => setView('epics')}
-        >
-          By epic
-        </button>
-      </div>
+      <Tabs
+        activeKey={view}
+        onChange={(v) => setView(v as 'plan' | 'epics')}
+        items={[
+          { key: 'plan', label: kanban ? 'Backlog' : 'Sprints & backlog' },
+          { key: 'epics', label: 'By epic' },
+        ]}
+      />
       <WorkItemFilters
         state={filters}
         fields={['type', 'priority', 'assignee', 'epic']}
         members={members}
         epics={epics}
       />
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={showDone}
-          onChange={(e) => setShowDone(e.target.checked)}
-        />
+      <Checkbox
+        className="check-row"
+        checked={showDone}
+        onChange={(e) => setShowDone(e.target.checked)}
+      >
         Show done items
-      </label>
+      </Checkbox>
       <BulkActions
         ids={[...selected]}
         members={members}
@@ -116,15 +118,21 @@ export default function BacklogPage() {
       {view === 'plan' ? (
         <>
           {kanban && (
-            <section className="card">
-              <div className="section-head">
-                <h3>On the board</h3>
-                <Button asChild variant="outline">
-                  <Link to={`/projects/${pid}/board`}>Open board</Link>
-                </Button>
-              </div>
+            <Card
+              className="card"
+              title="On the board"
+              extra={
+                <LinkButton
+                  variant="outline"
+                  size="small"
+                  to={`/projects/${pid}/board`}
+                >
+                  Open board
+                </LinkButton>
+              }
+            >
               <IssueTable issues={inFlow} />
-            </section>
+            </Card>
           )}
           <PlanningBoard
             projectId={pid}
@@ -167,9 +175,12 @@ export default function BacklogPage() {
                       </Button>
                     ) : (
                       <>
-                        <Button asChild variant="outline">
-                          <Link to={`/projects/${pid}/board`}>Board</Link>
-                        </Button>
+                        <LinkButton
+                          variant="outline"
+                          to={`/projects/${pid}/board`}
+                        >
+                          Board
+                        </LinkButton>
                         <Button
                           variant="outline"
                           onClick={() =>
@@ -203,33 +214,39 @@ export default function BacklogPage() {
             );
             if (!items.length && !epic) return null;
             return (
-              <section className="card" key={epic?.id ?? 'none'}>
-                <div className="section-head">
-                  <h3 className="epic">
-                    {epic ? (
-                      <Link to={`/issues/${epic.id}`}>
-                        EPIC · {epic.summary}
-                      </Link>
-                    ) : (
-                      'Ungrouped issues'
-                    )}
-                  </h3>
+              <Card
+                className="card"
+                key={epic?.id ?? 'none'}
+                title={
+                  epic ? (
+                    <Link className="epic" to={`/issues/${epic.id}`}>
+                      EPIC · {epic.summary}
+                    </Link>
+                  ) : (
+                    'Ungrouped issues'
+                  )
+                }
+                extra={
                   <div className="actions">
-                    <span className="muted">{items.length} items</span>
+                    <Typography.Text type="secondary">
+                      {items.length} items
+                    </Typography.Text>
                     {epic && (
                       <Button
                         variant="ghost"
+                        icon={<PlusOutlined />}
                         onClick={() =>
                           create({ project_id: pid, epic_id: epic.id })
                         }
                       >
-                        + Add
+                        Add
                       </Button>
                     )}
                   </div>
-                </div>
+                }
+              >
                 <IssueTable issues={items} sprints={all} />
-              </section>
+              </Card>
             );
           })}
         </>

@@ -5,14 +5,32 @@ import {
   useContext,
   lazy,
   Suspense,
+  type ReactNode,
 } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Button, Input, Layout, Menu, Select, type MenuProps } from 'antd';
 import {
-  Link,
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from 'react-router-dom';
+  ApartmentOutlined,
+  AppstoreOutlined,
+  AudioOutlined,
+  BugOutlined,
+  DashboardOutlined,
+  ExperimentOutlined,
+  FieldTimeOutlined,
+  FolderOutlined,
+  FundOutlined,
+  GithubOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  MessageOutlined,
+  PlayCircleOutlined,
+  ProfileOutlined,
+  ProjectOutlined,
+  RobotOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+  UnorderedListOutlined,
+} from '@ant-design/icons';
 import { useProjects, useMe } from '../../hooks/data';
 import ProjectNav from './ProjectNav';
 import SidebarProfile from './SidebarProfile';
@@ -44,6 +62,7 @@ const remembered = () => {
     return undefined;
   }
 };
+type NavItem = [string, string, ReactNode];
 export default function AppShell() {
   const projects = useProjects();
   const me = useMe();
@@ -51,7 +70,7 @@ export default function AppShell() {
   const nav = useNavigate();
   const [create, setCreate] = useState<Partial<Issue> | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const [search, setSearch] = useState('');
+  const [narrow, setNarrow] = useState(false);
   const [lastProject, setLastProject] = useState(remembered);
   const [pageProject, setPageProject] = useState<number>();
   const match = location.pathname.match(/projects\/(\d+)/);
@@ -74,44 +93,86 @@ export default function AppShell() {
     ) ?? projects.data?.[0]?.id;
   const inProject = (page: string) =>
     projectId ? `/projects/${projectId}/${page}` : '/projects';
-  const sections: [string, [string, string][]][] = [
+  const sections: [string, NavItem[]][] = [
     [
       '',
       [
-        ['Dashboard', '/dashboard'],
-        ['Projects', '/projects'],
-        ['Backlog', inProject('backlog')],
-        ['Sprints', inProject('sprints')],
-        ['Board', inProject('board')],
-        ['My Issues', '/my-issues'],
-        ['Chats', projectId ? `/chat?project=${projectId}` : '/chat'],
-        ['Automations', '/automations'],
+        ['Dashboard', '/dashboard', <DashboardOutlined />],
+        ['Projects', '/projects', <FolderOutlined />],
+        ['Backlog', inProject('backlog'), <UnorderedListOutlined />],
+        ['Sprints', inProject('sprints'), <FieldTimeOutlined />],
+        ['Board', inProject('board'), <ProjectOutlined />],
+        ['My Issues', '/my-issues', <ProfileOutlined />],
+        [
+          'Chats',
+          projectId ? `/chat?project=${projectId}` : '/chat',
+          <MessageOutlined />,
+        ],
+        ['Automations', '/automations', <ThunderboltOutlined />],
         ...(me.data?.role === 'ADMIN'
-          ? [['People', '/people'] as [string, string]]
+          ? [['People', '/people', <TeamOutlined />] as NavItem]
           : []),
       ],
     ],
     [
-      'QUALITY',
+      'Quality',
       [
-        ['QA Dashboard', inProject('quality')],
+        ['QA Dashboard', inProject('quality'), <FundOutlined />],
         [
           'AI Generator',
           projectId ? `/ai-generator?project=${projectId}` : '/ai-generator',
+          <RobotOutlined />,
         ],
         [
           'Test Repository',
           projectId ? `/test-cases?project=${projectId}` : '/test-cases',
+          <ExperimentOutlined />,
         ],
-        ['Test Runs', inProject('test-runs')],
-        ['Bugs', inProject('bugs')],
-        ['Traceability', inProject('traceability')],
+        ['Test Runs', inProject('test-runs'), <PlayCircleOutlined />],
+        ['Bugs', inProject('bugs'), <BugOutlined />],
+        ['Traceability', inProject('traceability'), <ApartmentOutlined />],
       ],
     ],
-    ['CODE', [['GitHub', '/github']]],
-    ['', [['Voice Agent', '/voice-agent']]],
+    ['Code', [['GitHub', '/github', <GithubOutlined />]]],
+    ['', [['Voice Agent', '/voice-agent', <AudioOutlined />]]],
   ];
-  const isCurrent = (url: string) => url.split('?')[0] === location.pathname;
+  const toItem = ([name, url, icon]: NavItem) => ({
+    key: name,
+    icon,
+    label: <Link to={url}>{name}</Link>,
+    title: name,
+  });
+  const menuItems: MenuProps['items'] = [
+    ...sections
+      .flatMap(([heading, items], index) => [
+        ...(index ? [{ type: 'divider' as const }] : []),
+        heading && !collapsed
+          ? {
+              type: 'group' as const,
+              key: heading,
+              label: heading.toUpperCase(),
+              children: items.map(toItem),
+            }
+          : items.map(toItem),
+      ])
+      .flat(),
+    { type: 'divider' as const },
+    {
+      type: 'group' as const,
+      key: 'recent',
+      label: collapsed ? null : 'RECENT PROJECTS',
+      children: (projects.data ?? []).slice(0, 5).map((p) => ({
+        key: `recent-${p.id}`,
+        icon: <AppstoreOutlined />,
+        label: <Link to={`/projects/${p.id}`}>{p.name}</Link>,
+        title: p.name,
+      })),
+    },
+  ];
+  const selected = sections
+    .flatMap(([, items]) => items)
+    .filter(([, url]) => url.split('?')[0] === location.pathname)
+    .map(([name]) => name);
   const projectPage = location.pathname.match(/^\/projects\/(\d+)\/?([\w-]*)$/);
   const navProject = projectPage ? Number(projectPage[1]) : pageProject;
   /** Shows the same page for another project, else that project's overview. */
@@ -134,111 +195,83 @@ export default function AppShell() {
     <PageProjectContext.Provider value={setPageProject}>
       <ProjectContext.Provider value={projectId}>
         <CreateContext.Provider value={(initial) => setCreate(initial ?? {})}>
-          <div className={`app ${collapsed ? 'collapsed' : ''}`}>
-            <aside className="sidebar">
-              <Link
-                to="/dashboard"
-                aria-label="Zeno Work Suite dashboard"
-                className="brand"
-              >
-                <span className="logo" />
-                <span>Zeno Work Suite</span>
-              </Link>
-              {sections.map(([heading, items], index) => (
-                <nav key={index} aria-label={heading || undefined}>
-                  {heading && <small className="nav-heading">{heading}</small>}
-                  {items.map(([name, url]) => (
-                    <NavLink
-                      key={name}
-                      aria-label={name}
-                      title={name}
-                      onClick={() => {
-                        if (window.innerWidth <= 900) setCollapsed(false);
-                      }}
-                      to={url}
-                      end
-                      className={({ isActive }) =>
-                        isActive ? 'nav-link active' : 'nav-link'
-                      }
-                    >
-                      <img
-                        alt=""
-                        src={`/assets/${isCurrent(url) ? 'imgEllipse' : 'imgEllipse1'}.svg`}
-                      />
-                      <span>{name}</span>
-                    </NavLink>
-                  ))}
-                </nav>
-              ))}
-              <div className="sidebar-projects">
-                <small>RECENT PROJECTS</small>
-                {projects.data?.slice(0, 5).map((p) => (
-                  <Link
-                    className="nav-link"
-                    aria-label={p.name}
-                    title={p.name}
-                    to={`/projects/${p.id}`}
-                    key={p.id}
-                  >
-                    <img alt="" src="/assets/imgEllipse1.svg" />
-                    <span>{p.name}</span>
-                  </Link>
-                ))}
+          <Layout hasSider className="app">
+            <Layout.Sider
+              className="sidebar"
+              width={232}
+              collapsedWidth={narrow ? 0 : 64}
+              collapsed={collapsed}
+              breakpoint="lg"
+              onBreakpoint={(broken) => {
+                setNarrow(broken);
+                setCollapsed(broken);
+              }}
+              trigger={null}
+              theme="light"
+            >
+              <div className="sidebar-inner">
+                <Link
+                  to="/dashboard"
+                  aria-label="Zeno TeamSuite dashboard"
+                  className="brand"
+                >
+                  <span className="logo">Z</span>
+                  {!collapsed && <span>Zeno TeamSuite</span>}
+                </Link>
+                <Menu
+                  mode="inline"
+                  className="side-menu"
+                  inlineCollapsed={collapsed}
+                  selectedKeys={selected}
+                  items={menuItems}
+                  onClick={() => narrow && setCollapsed(true)}
+                />
+                <SidebarProfile collapsed={collapsed} />
               </div>
-              <div className="sidebar-footer">
-                <span>One place. Every next step.</span>
-              </div>
-              <SidebarProfile />
-            </aside>
-            <div className="workspace">
-              <header className="topbar">
+            </Layout.Sider>
+            <Layout className="workspace">
+              <Layout.Header className="topbar">
+                <Button
+                  type="text"
+                  icon={
+                    collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />
+                  }
+                  onClick={() => setCollapsed(!collapsed)}
+                  aria-label="Toggle sidebar"
+                />
                 <div className="actions">
-                  <button
-                    className="menu-toggle"
-                    onClick={() => setCollapsed(!collapsed)}
-                    aria-label="Toggle sidebar"
-                  >
-                    ☰
-                  </button>
-                </div>
-                <div className="actions">
-                  <form
+                  <Input.Search
                     className="search"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      nav(`/my-issues?q=${encodeURIComponent(search)}`);
-                    }}
-                  >
-                    <input
-                      aria-label="Search issues"
-                      placeholder="Search issues…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                  </form>
-                  <select
+                    aria-label="Search issues"
+                    placeholder="Search issues…"
+                    allowClear
+                    onSearch={(q) =>
+                      nav(`/my-issues?q=${encodeURIComponent(q)}`)
+                    }
+                  />
+                  <Select
                     className="project-switcher"
                     aria-label="Project"
-                    value={projectId ?? ''}
+                    value={projectId}
+                    placeholder="No projects"
                     disabled={!projects.data?.length}
-                    onChange={(e) => switchProject(Number(e.target.value))}
-                  >
-                    {!projects.data?.length && (
-                      <option value="">No projects</option>
-                    )}
-                    {projects.data?.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={switchProject}
+                    showSearch={{ optionFilterProp: 'label' }}
+                    options={projects.data?.map((p) => ({
+                      value: p.id,
+                      label: p.name,
+                    }))}
+                  />
                 </div>
-              </header>
-              <main>
+              </Layout.Header>
+              <Layout.Content className="content">
                 {navProject && <ProjectNav projectId={navProject} />}
                 <Outlet />
-              </main>
-            </div>
+              </Layout.Content>
+            </Layout>
+            {narrow && !collapsed && (
+              <div className="sider-mask" onClick={() => setCollapsed(true)} />
+            )}
             {create && (
               <Suspense fallback={null}>
                 <CreateIssueModal
@@ -247,7 +280,7 @@ export default function AppShell() {
                 />
               </Suspense>
             )}
-          </div>
+          </Layout>
         </CreateContext.Provider>
       </ProjectContext.Provider>
     </PageProjectContext.Provider>

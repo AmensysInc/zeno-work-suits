@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Markdown from 'react-markdown';
+import { Card, Descriptions, Tabs, Typography } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { useData, useIssues, useSave } from '../hooks/data';
-import { type Issue, type Sprint, statuses, priorities, label } from '../types';
+import { type Issue, type Sprint, statuses, priorities } from '../types';
 import { State, Badge, Field } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
+import { DateInput, Select, labelled } from '../components/ui/form';
+import { confirm } from '../components/ui/confirm';
 import TestCaseList from '../components/testing/TestCaseList';
 import Comments from '../components/issues/Comments';
 import ActivityHistory from '../components/issues/ActivityHistory';
@@ -33,10 +37,10 @@ export default function IssueDetailsPage() {
     <>
       <div className="page-heading">
         <div>
-          <p className="key">
-            {issue.issue_key} · {issue.issue_type}
-          </p>
-          <h1>{issue.summary}</h1>
+          <Typography.Text type="secondary" className="key">
+            {issue.issue_key} · <Badge value={issue.issue_type} />
+          </Typography.Text>
+          <Typography.Title level={3}>{issue.summary}</Typography.Title>
           {issue.ai_source?.source_commit && (
             <p className="muted">
               Generated from {issue.ai_source.repository}
@@ -48,15 +52,21 @@ export default function IssueDetailsPage() {
           )}
         </div>
         <div className="actions">
-          <Button variant="outline" onClick={() => create(issue)}>
+          <Button
+            variant="outline"
+            icon={<EditOutlined />}
+            onClick={() => create(issue)}
+          >
             Edit issue
           </Button>
           <Button
-            variant="ghost"
+            variant="destructive"
+            icon={<DeleteOutlined />}
             onClick={async () => {
               if (
-                window.confirm(
+                await confirm(
                   'Delete this issue and its criteria, tests and comments?',
+                  { okText: 'Delete' },
                 )
               ) {
                 try {
@@ -74,19 +84,17 @@ export default function IssueDetailsPage() {
       </div>
       <div className="detail-grid">
         <div>
-          <div className="tabs">
-            {['Overview', childTab, 'Test Cases', 'Comments', 'Activity'].map(
-              (t) => (
-                <button
-                  key={t}
-                  className={tab === t ? 'selected' : ''}
-                  onClick={() => setTab(t)}
-                >
-                  {t}
-                </button>
-              ),
-            )}
-          </div>
+          <Tabs
+            activeKey={tab}
+            onChange={setTab}
+            items={[
+              'Overview',
+              childTab,
+              'Test Cases',
+              'Comments',
+              'Activity',
+            ].map((t) => ({ key: t, label: t }))}
+          />
           {tab === 'Comments' ? (
             <Comments issueId={issue.id} />
           ) : tab === 'Activity' ? (
@@ -95,8 +103,7 @@ export default function IssueDetailsPage() {
             <TestCaseList issueId={issue.id} />
           ) : tab === 'Overview' ? (
             <>
-              <section className="card">
-                <h2>Description</h2>
+              <Card className="card" title="Description">
                 <div className="markdown">
                   <Markdown>
                     {issue.description || 'No description yet.'}
@@ -109,16 +116,18 @@ export default function IssueDetailsPage() {
                     ))}
                   </div>
                 )}
-              </section>
+              </Card>
               {issue.issue_type === 'STORY' && (
                 <AcceptanceCriteria issueId={issue.id} />
               )}
             </>
           ) : (
-            <section className="card">
-              <div className="section-head">
-                <h2>{childTab}</h2>
+            <Card
+              className="card"
+              title={childTab}
+              extra={
                 <Button
+                  icon={<PlusOutlined />}
                   onClick={() =>
                     create(
                       epic
@@ -136,9 +145,10 @@ export default function IssueDetailsPage() {
                     )
                   }
                 >
-                  {epic ? '+ Add child issue' : '+ Add subtask'}
+                  {epic ? 'Add child issue' : 'Add subtask'}
                 </Button>
-              </div>
+              }
+            >
               <IssueTable
                 issues={
                   all.data?.filter((i) =>
@@ -148,69 +158,64 @@ export default function IssueDetailsPage() {
                   ) ?? []
                 }
               />
-            </section>
+            </Card>
           )}
         </div>
-        <aside className="card details-panel">
-          <h2>Details</h2>
+        <Card className="card details-panel" title="Details">
           <Field label="Status">
-            <select
+            <Select
               value={issue.status}
               disabled={save.isPending}
-              onChange={(e) => save.mutate({ status: e.target.value })}
-            >
-              {statuses.map((s) => (
-                <option key={s} value={s}>
-                  {label(s)}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => save.mutate({ status: v })}
+              options={labelled(statuses)}
+            />
           </Field>
           <Field label="Priority">
-            <select
+            <Select
               value={issue.priority}
               disabled={save.isPending}
-              onChange={(e) => save.mutate({ priority: e.target.value })}
-            >
-              {priorities.map((p) => (
-                <option key={p} value={p}>
-                  {label(p)}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => save.mutate({ priority: v })}
+              options={labelled(priorities)}
+            />
           </Field>
-          <dl>
-            <dt>Assignee</dt>
-            <dd>
-              {issue.assignee
-                ? `${issue.assignee.first_name} ${issue.assignee.last_name}`
-                : 'Unassigned'}
-            </dd>
-            <dt>Reporter</dt>
-            <dd>
-              {issue.reporter.first_name} {issue.reporter.last_name}
-            </dd>
-            <dt>Epic</dt>
-            <dd>
-              {all.data?.find((i) => i.id === issue.epic_id)?.summary ?? 'None'}
-            </dd>
-            <dt>Sprint</dt>
-            <dd>
-              {sprints.data?.find((s) => s.id === issue.sprint_id)?.name ??
-                'Backlog'}
-            </dd>
-            <dt>Story points</dt>
-            <dd>{issue.story_points}</dd>
-            <dt>Created</dt>
-            <dd>{new Date(issue.created_at).toLocaleDateString()}</dd>
-          </dl>
+          <Descriptions
+            column={1}
+            size="small"
+            className="details-list"
+            items={[
+              {
+                label: 'Assignee',
+                children: issue.assignee
+                  ? `${issue.assignee.first_name} ${issue.assignee.last_name}`
+                  : 'Unassigned',
+              },
+              {
+                label: 'Reporter',
+                children: `${issue.reporter.first_name} ${issue.reporter.last_name}`,
+              },
+              {
+                label: 'Epic',
+                children:
+                  all.data?.find((i) => i.id === issue.epic_id)?.summary ??
+                  'None',
+              },
+              {
+                label: 'Sprint',
+                children:
+                  sprints.data?.find((s) => s.id === issue.sprint_id)?.name ??
+                  'Backlog',
+              },
+              { label: 'Story points', children: issue.story_points },
+              {
+                label: 'Created',
+                children: new Date(issue.created_at).toLocaleDateString(),
+              },
+            ]}
+          />
           <Field label="Due date">
-            <input
-              type="date"
-              value={issue.due_date ?? ''}
-              onChange={(e) =>
-                save.mutate({ due_date: e.target.value || null })
-              }
+            <DateInput
+              value={issue.due_date}
+              onChange={(v) => save.mutate({ due_date: v || null })}
             />
           </Field>
           {issue.related_issue_id && (
@@ -238,7 +243,7 @@ export default function IssueDetailsPage() {
               </Link>
             </p>
           )}
-        </aside>
+        </Card>
       </div>
     </>
   );

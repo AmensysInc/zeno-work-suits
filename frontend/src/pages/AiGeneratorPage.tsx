@@ -2,9 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Alert, Card, Checkbox, Result, Typography } from 'antd';
+import { RobotOutlined, SaveOutlined } from '@ant-design/icons';
 import { useCurrentProject } from '../components/layout/AppShell';
+import RepoActivity from '../components/github/RepoActivity';
 import { Button } from '../components/ui/button';
 import { Field, PageHeader, State } from '../components/ui/shared';
+import { Select } from '../components/ui/form';
 import { useData, useProjects } from '../hooks/data';
 import { api, errorMessage } from '../services/api';
 import {
@@ -16,7 +20,8 @@ import {
   type GeneratorCoverage,
   type GeneratorModule,
   type GeneratorOutput,
-  type GeneratorSuggestions,
+  type GitHubBranches,
+  type GitHubPull,
   type Project,
 } from '../types';
 
@@ -65,6 +70,19 @@ export default function AiGeneratorPage() {
     projects.data?.[0]?.id;
   const project = projects.data?.find((p) => p.id === projectId);
   const [modulePath, setModulePath] = useState('');
+  const [picked, setPull] = useState<
+    (GitHubPull & { projectId?: number }) | null
+  >(null);
+  // A pull request belongs to one repository; switching project drops it.
+  const pull = picked?.projectId === projectId ? picked : null;
+  const [pickedBranch, setBranch] = useState<{
+    name: string;
+    projectId?: number;
+  } | null>(null);
+  const branch =
+    pickedBranch && pickedBranch.projectId === projectId
+      ? pickedBranch.name
+      : '';
   const [outputType, setOutputType] = useState<GeneratorOutput>('BOTH');
   const [coverage, setCoverage] = useState<GeneratorCoverage[]>(['POSITIVE']);
   const [draft, setDraft] = useState<GeneratedDraft | null>(null);
@@ -78,7 +96,7 @@ export default function AiGeneratorPage() {
     issue_ids: number[];
     test_case_ids: number[];
   } | null>(null);
-  const reviewRef = useRef<HTMLElement>(null);
+  const reviewRef = useRef<HTMLDivElement>(null);
   const status = useData<{
     github_configured: boolean;
     openai_configured: boolean;
@@ -87,16 +105,105 @@ export default function AiGeneratorPage() {
     `/ai-generator/projects/${projectId}/modules`,
     !!project && !!repoName(project.github_repo),
   );
-  const suggestions = useData<GeneratorSuggestions>(
-    `/ai-generator/projects/${projectId}/change-suggestions`,
-    !!project && !!repoName(project.github_repo),
+  const hasRepo = !!project && !!repoName(project.github_repo);
+  const pulls = useData<GitHubPull[]>(
+    `/github/projects/${projectId}/pulls?state=all`,
+    hasRepo && !!status.data?.github_configured,
   );
+  const branches = useData<GitHubBranches>(
+    `/github/projects/${projectId}/branches`,
+    hasRepo && !!status.data?.github_configured,
+  );
+  const pullModule = useMutation({
+    mutationFn: async (selected: GitHubPull) =>
+      (
+        await api.get<{
+          module_path: string;
+          changed_files: number;
+          matched_files: number;
+        }>(
+          `/ai-generator/projects/${projectId}/pulls/${selected.number}/module`,
+        )
+      ).data,
+    onSuccess: (result, selected) => {
+      setModulePath(result.module_path);
+      if (result.module_path) {
+        const share =
+          result.matched_files < result.changed_files
+            ? ` (${result.matched_files} of ${result.changed_files} changed files)`
+            : '';
+        toast.success(
+          `Module set to ${result.module_path} from PR #${selected.number}${share}`,
+        );
+      } else {
+        toast.info(
+          result.changed_files
+            ? `PR #${selected.number} changes files outside the listed modules, so the entire repository is selected`
+            : `PR #${selected.number} changes no source files, so the entire repository is selected`,
+        );
+      }
+    },
+    onError: (e) => {
+      setPull(null);
+      toast.error(errorMessage(e));
+    },
+  });
+  const selectPull = (selected: GitHubPull) => {
+    if (pull?.number === selected.number) {
+      setPull(null);
+      return;
+    }
+    setPull({ ...selected, projectId });
+    setBranch(null);
+    pullModule.mutate(selected);
+  };
+  // One dropdown carries modules, pull requests and branches; the prefix says which.
+  const source = pull
+    ? `pull:${pull.number}`
+    : branch
+      ? `branch:${branch}`
+      : `module:${modulePath}`;
+  const selectSource = (value: string) => {
+    const [kind, ...rest] = value.split(':');
+    const target = rest.join(':');
+    if (kind === 'pull') {
+      const selected =
+        pulls.data?.find((p) => String(p.number) === target) ??
+        (pull && String(pull.number) === target ? pull : undefined);
+      if (selected) selectPull(selected);
+      return;
+    }
+    setPull(null);
+    if (kind === 'branch') {
+      // A branch is read whole; its own folders may differ from the default branch.
+      setModulePath('');
+      setBranch({ name: target, projectId });
+      return;
+    }
+    setBranch(null);
+    setModulePath(target);
+  };
+  const pullOptions = [
+    ...(pull && !pulls.data?.some((p) => p.number === pull.number)
+      ? [pull]
+      : []),
+    ...(pulls.data ?? []),
+  ].map((p) => ({
+    value: `pull:${p.number}`,
+    label: `#${p.number} ${p.title} (${p.state === 'open' ? p.head : p.state})`,
+  }));
+  const branchOptions = (branches.data?.branches ?? []).map((b) => ({
+    value: `branch:${b.name}`,
+    label:
+      b.name === branches.data?.default_branch ? `${b.name} (default)` : b.name,
+  }));
   const generate = useMutation({
     mutationFn: async () =>
       (
         await api.post<GeneratedDraft>('/ai-generator/generate', {
           project_id: projectId,
           module_path: modulePath,
+          branch,
           output_type: outputType,
           coverage: coverage.length ? coverage : ['POSITIVE'],
         })
@@ -151,14 +258,6 @@ export default function AiGeneratorPage() {
     }
   }, [draft]);
 
-  const toggleCoverage = (value: GeneratorCoverage) => {
-    setCoverage((currentCoverage) =>
-      currentCoverage.includes(value)
-        ? currentCoverage.filter((item) => item !== value)
-        : [...currentCoverage, value],
-    );
-  };
-
   const approve = async () => {
     if (!draft) return;
     const user_stories = draft.user_stories
@@ -188,73 +287,115 @@ export default function AiGeneratorPage() {
         description="Read a linked GitHub module, draft user stories, acceptance criteria and manual tests, then approve what should be saved."
       />
       <div className="generator-grid">
-        <section className="card">
-          <h2>Generate</h2>
+        <Card className="card" title="Generate">
           <Field label="GitHub repository">
-            <select
+            <Select
               aria-label="GitHub repository"
-              value={projectId ?? ''}
-              onChange={(e) => nav(`/ai-generator?project=${e.target.value}`)}
-            >
-              {(projects.data ?? []).map((item: Project) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {repoName(item.github_repo)
+              value={projectId}
+              onChange={(v) => nav(`/ai-generator?project=${v}`)}
+              options={(projects.data ?? []).map((item: Project) => ({
+                value: item.id,
+                label: `${item.name}${
+                  repoName(item.github_repo)
                     ? ` · ${repoName(item.github_repo)}`
-                    : ' · no repository'}
-                </option>
-              ))}
-            </select>
+                    : ' · no repository'
+                }`,
+              }))}
+            />
           </Field>
           {project && !repoName(project.github_repo) && (
-            <p className="muted">
-              Link a repository on the <Link to="/github">GitHub</Link> page
-              first.
-            </p>
+            <Alert
+              className="linked-context"
+              type="warning"
+              showIcon
+              title={
+                <>
+                  Link a repository on the <Link to="/github">GitHub</Link> page
+                  first.
+                </>
+              }
+            />
           )}
           <Field label="Application module">
-            <select
+            <Select
               aria-label="Application module"
-              value={modulePath}
-              onChange={(e) => setModulePath(e.target.value)}
-              disabled={!modules.data}
-            >
-              <option value="">Entire repository</option>
-              {modules.data
-                ?.filter((item) => item.path)
-                .map((item) => (
-                  <option key={item.path} value={item.path}>
-                    {item.path} ({item.file_count} files)
-                  </option>
-                ))}
-            </select>
+              value={source}
+              onChange={selectSource}
+              loading={pullModule.isPending}
+              disabled={!modules.data || pullModule.isPending}
+              options={[
+                {
+                  label: 'Modules',
+                  options: [
+                    { value: 'module:', label: 'Entire repository' },
+                    // A pull request can point deeper than the listed folders.
+                    ...(modulePath &&
+                    !modules.data?.some((item) => item.path === modulePath)
+                      ? [{ value: `module:${modulePath}`, label: modulePath }]
+                      : []),
+                    ...(modules.data ?? [])
+                      .filter((item) => item.path)
+                      .map((item) => ({
+                        value: `module:${item.path}`,
+                        label: `${item.path} (${item.file_count} files)`,
+                      })),
+                  ],
+                },
+                ...(pullOptions.length
+                  ? [{ label: 'Pull requests', options: pullOptions }]
+                  : []),
+                ...(branchOptions.length
+                  ? [{ label: 'Branches', options: branchOptions }]
+                  : []),
+              ]}
+            />
           </Field>
+          {pull && (
+            <Alert
+              className="linked-context"
+              type="info"
+              showIcon
+              closable={{ onClose: () => setPull(null) }}
+              title={
+                <>
+                  From PR #{pull.number}: {pull.title}
+                  {modulePath ? ` · module ${modulePath}` : ''}
+                </>
+              }
+            />
+          )}
+          {branch && (
+            <Alert
+              className="linked-context"
+              type="info"
+              showIcon
+              closable={{ onClose: () => setBranch(null) }}
+              title={`Generating from branch ${branch} (entire branch)`}
+            />
+          )}
           <Field label="Generate">
-            <select
+            <Select
               aria-label="Output type"
               value={outputType}
-              onChange={(e) => setOutputType(e.target.value as GeneratorOutput)}
-            >
-              {generatorOutputs.map((value) => (
-                <option key={value} value={value}>
-                  {outputLabel[value]}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setOutputType(v as GeneratorOutput)}
+              options={generatorOutputs.map((value) => ({
+                value,
+                label: outputLabel[value],
+              }))}
+            />
           </Field>
-          <fieldset className="field">
-            <legend>Test coverage</legend>
-            {generatorCoverage.map((value) => (
-              <label key={value} className="check-row">
-                <input
-                  type="checkbox"
-                  checked={coverage.includes(value)}
-                  onChange={() => toggleCoverage(value)}
-                />
-                {coverageLabel[value]}
-              </label>
-            ))}
-          </fieldset>
+          <div className="field">
+            <span>Test coverage</span>
+            <Checkbox.Group
+              className="coverage-group"
+              value={coverage}
+              onChange={(v) => setCoverage(v as GeneratorCoverage[])}
+              options={generatorCoverage.map((value) => ({
+                value,
+                label: coverageLabel[value],
+              }))}
+            />
+          </div>
           <p className="muted">
             {status.data?.openai_configured
               ? 'OpenAI will draft from the selected source files.'
@@ -262,61 +403,45 @@ export default function AiGeneratorPage() {
           </p>
           <div className="actions">
             <Button
-              disabled={!project || generate.isPending}
+              icon={<RobotOutlined />}
+              disabled={!project}
+              loading={generate.isPending}
               onClick={() => generate.mutate()}
             >
               {generate.isPending ? 'Generating…' : 'Generate'}
             </Button>
           </div>
-        </section>
-        <section className="card">
-          <h2>GitHub changes</h2>
-          {suggestions.data ? (
-            <>
-              <p>{suggestions.data.message}</p>
-              <SourceNote
-                repository={repoName(project?.github_repo ?? '') ?? ''}
-                commit={suggestions.data.current_commit}
-              />
-              {suggestions.data.stale_story_ids.length > 0 && (
-                <ul className="covered">
-                  {suggestions.data.stale_story_ids.map((id) => (
-                    <li key={id}>
-                      <Link to={`/issues/${id}`}>Review story #{id}</Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          ) : (
-            <p className="muted">
-              After you save generated items, this panel flags them when the
-              linked repository moves to a new commit.
-            </p>
-          )}
-        </section>
+        </Card>
+        <RepoActivity
+          key={projectId}
+          project={project}
+          configured={status.data?.github_configured}
+          selectedPull={pull?.number}
+          onSelectPull={selectPull}
+        />
       </div>
       {generate.isPending && <State loading />}
       {draft && (
-        <section className="card generator-review" ref={reviewRef}>
-          <div className="section-head">
-            <div>
-              <h2>Review before saving</h2>
-              <SourceNote
-                repository={draft.repository}
-                modulePath={draft.module_path}
-                commit={draft.source_commit}
-              />
-            </div>
+        <Card
+          className="card generator-review"
+          ref={reviewRef}
+          title="Review before saving"
+          extra={
             <Button
-              disabled={!approvedCount || save.isPending}
+              icon={<SaveOutlined />}
+              disabled={!approvedCount}
+              loading={save.isPending}
               onClick={approve}
             >
-              {save.isPending
-                ? 'Saving…'
-                : `Save ${approvedCount} approved item${approvedCount === 1 ? '' : 's'}`}
+              {`Save ${approvedCount} approved item${approvedCount === 1 ? '' : 's'}`}
             </Button>
-          </div>
+          }
+        >
+          <SourceNote
+            repository={draft.repository}
+            modulePath={draft.module_path}
+            commit={draft.source_commit}
+          />
           {draft.notes.map((note) => (
             <p className="muted" key={note}>
               {note}
@@ -333,54 +458,52 @@ export default function AiGeneratorPage() {
               className="generator-story"
               key={`${story.title}-${index}`}
             >
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  checked={selectedStories.has(index)}
-                  onChange={() => {
-                    const next = new Set(selectedStories);
-                    if (next.has(index)) next.delete(index);
-                    else next.add(index);
-                    setSelectedStories(next);
-                  }}
-                />
-                <strong>{story.title}</strong>
-                <span className="muted">
+              <Checkbox
+                className="check-row"
+                checked={selectedStories.has(index)}
+                onChange={() => {
+                  const next = new Set(selectedStories);
+                  if (next.has(index)) next.delete(index);
+                  else next.add(index);
+                  setSelectedStories(next);
+                }}
+              >
+                <strong>{story.title}</strong>{' '}
+                <Typography.Text type="secondary">
                   {label(story.priority)} · {story.story_points} pts
-                </span>
-              </label>
+                </Typography.Text>
+              </Checkbox>
               <p>{story.description}</p>
-              <h3>Acceptance criteria</h3>
+              <Typography.Title level={5}>Acceptance criteria</Typography.Title>
               <ul className="covered">
                 {story.acceptance_criteria.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
-              {story.test_cases.length > 0 && <h3>Manual test cases</h3>}
+              {story.test_cases.length > 0 && (
+                <Typography.Title level={5}>Manual test cases</Typography.Title>
+              )}
               {story.test_cases.map((test, testIndex) => (
                 <div
                   className="generator-test"
                   key={`${test.title}-${testIndex}`}
                 >
-                  <label className="check-row">
-                    <input
-                      type="checkbox"
-                      checked={selectedTests[index]?.has(testIndex) ?? false}
-                      onChange={() => {
-                        const currentTests = new Set(
-                          selectedTests[index] ?? [],
-                        );
-                        if (currentTests.has(testIndex))
-                          currentTests.delete(testIndex);
-                        else currentTests.add(testIndex);
-                        setSelectedTests({
-                          ...selectedTests,
-                          [index]: currentTests,
-                        });
-                      }}
-                    />
+                  <Checkbox
+                    className="check-row"
+                    checked={selectedTests[index]?.has(testIndex) ?? false}
+                    onChange={() => {
+                      const currentTests = new Set(selectedTests[index] ?? []);
+                      if (currentTests.has(testIndex))
+                        currentTests.delete(testIndex);
+                      else currentTests.add(testIndex);
+                      setSelectedTests({
+                        ...selectedTests,
+                        [index]: currentTests,
+                      });
+                    }}
+                  >
                     <strong>{test.title}</strong>
-                  </label>
+                  </Checkbox>
                   <ol>
                     {test.steps.map((step, stepIndex) => (
                       <li key={`${step.action}-${stepIndex}`}>
@@ -395,18 +518,19 @@ export default function AiGeneratorPage() {
               ))}
             </article>
           ))}
-        </section>
+        </Card>
       )}
       {saved && (
-        <section className="card">
-          <h2>Saved to Zeno Work Suite</h2>
-          <p>
-            {saved.issue_ids.length} user{' '}
-            {saved.issue_ids.length === 1 ? 'story' : 'stories'} and{' '}
-            {saved.test_case_ids.length} test case
-            {saved.test_case_ids.length === 1 ? '' : 's'} now live in the
-            project.
-          </p>
+        <Card className="card">
+          <Result
+            status="success"
+            title="Saved to Zeno TeamSuite"
+            subTitle={`${saved.issue_ids.length} user ${
+              saved.issue_ids.length === 1 ? 'story' : 'stories'
+            } and ${saved.test_case_ids.length} test case${
+              saved.test_case_ids.length === 1 ? '' : 's'
+            } now live in the project.`}
+          />
           <ul className="covered">
             {saved.issue_ids.map((id) => (
               <li key={id}>
@@ -419,7 +543,7 @@ export default function AiGeneratorPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
     </>
   );

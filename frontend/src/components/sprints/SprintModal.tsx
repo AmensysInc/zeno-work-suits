@@ -1,8 +1,10 @@
+import { Input } from 'antd';
 import { useSave } from '../../hooks/data';
 import type { Sprint, Issue } from '../../types';
 import { Modal } from '../ui/dialog';
 import { Field } from '../ui/shared';
 import { Button } from '../ui/button';
+import { DateInput } from '../ui/form';
 export default function SprintModal({
   projectId,
   sprint,
@@ -52,31 +54,29 @@ export default function SprintModal({
         }}
       >
         <Field label="Sprint name">
-          <input name="name" required defaultValue={sprint?.name} />
+          <Input name="name" required defaultValue={sprint?.name} />
         </Field>
         <Field label="Sprint goal">
-          <textarea name="goal" defaultValue={sprint?.goal} />
+          <Input.TextArea name="goal" rows={3} defaultValue={sprint?.goal} />
         </Field>
         <div className="form-grid">
           <Field label="Start date">
-            <input
+            <DateInput
               name="start_date"
-              type="date"
               required={start}
-              defaultValue={sprint?.start_date ?? ''}
+              defaultValue={sprint?.start_date}
             />
           </Field>
           <Field label="End date">
-            <input
+            <DateInput
               name="end_date"
-              type="date"
               required={start}
-              defaultValue={sprint?.end_date ?? ''}
+              defaultValue={sprint?.end_date}
             />
           </Field>
         </div>
         <Field label="Capacity · story points">
-          <input
+          <Input
             type="number"
             name="capacity"
             min="1"
@@ -94,7 +94,7 @@ export default function SprintModal({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={save.isPending || begin.isPending}>
+          <Button type="submit" loading={save.isPending || begin.isPending}>
             {start ? 'Start sprint' : 'Save sprint'}
           </Button>
         </div>

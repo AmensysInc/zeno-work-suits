@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { Avatar, Card, ConfigProvider, Input, Tag, Typography } from 'antd';
 import { useData, useMe, useSave } from '../hooks/data';
 import {
   canManageProject,
@@ -10,6 +11,8 @@ import {
 } from '../types';
 import { Badge, Field, PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
+import { Select, labelled } from '../components/ui/form';
+import { confirm } from '../components/ui/confirm';
 import ProjectFields from '../components/projects/ProjectFields';
 
 function MemberRow({
@@ -33,42 +36,39 @@ function MemberRow({
   );
   return (
     <div className="list-row">
-      <span className="mini-avatar">
+      <Avatar size={32} className="mini-avatar">
         {user.first_name[0]}
         {user.last_name[0]}
-      </span>
-      <strong>
-        {user.first_name} {user.last_name}
-      </strong>
-      <span className="muted">{user.email}</span>
+      </Avatar>
+      <div className="member-name">
+        <Typography.Text strong>
+          {user.first_name} {user.last_name}
+        </Typography.Text>
+        <Typography.Text type="secondary">{user.email}</Typography.Text>
+      </div>
       <Badge value={user.role} />
-      {user.id === project.owner_id && <span className="badge">Owner</span>}
+      {user.id === project.owner_id && <Tag color="gold">Owner</Tag>}
       {canRemove ? (
-        <select
+        <Select
+          className="role-select"
           aria-label={`Project role for ${user.first_name} ${user.last_name}`}
           value={role}
           disabled={changeRole.isPending}
-          onChange={(e) =>
-            changeRole.mutate({ user_ids: [user.id], role: e.target.value })
-          }
-        >
-          {projectRoles.map((r) => (
-            <option key={r} value={r}>
-              {label(r)}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => changeRole.mutate({ user_ids: [user.id], role: v })}
+          options={labelled(projectRoles)}
+        />
       ) : (
-        <span className="badge">{label(role)}</span>
+        <Tag>{label(role)}</Tag>
       )}
       {canRemove && user.id !== project.owner_id && (
         <Button
           variant="ghost"
           disabled={remove.isPending}
-          onClick={() => {
+          onClick={async () => {
             if (
-              window.confirm(
+              await confirm(
                 `Remove ${user.first_name} from ${project.name}? Their open work becomes unassigned.`,
+                { okText: 'Remove' },
               )
             )
               remove.mutate({});
@@ -107,8 +107,7 @@ export default function ProjectSettingsPage() {
         }
       />
       <div className="settings-grid">
-        <section className="card">
-          <h2>General</h2>
+        <Card className="card" title="General">
           <form
             key={p.updated_at}
             onSubmit={async (e) => {
@@ -122,12 +121,12 @@ export default function ProjectSettingsPage() {
               }
             }}
           >
-            <fieldset disabled={!canManage}>
+            <ConfigProvider componentDisabled={!canManage}>
               <Field label="Key">
-                <input value={p.key} disabled readOnly />
+                <Input value={p.key} disabled readOnly />
               </Field>
               <Field label="Name">
-                <input
+                <Input
                   name="name"
                   required
                   maxLength={200}
@@ -135,35 +134,46 @@ export default function ProjectSettingsPage() {
                 />
               </Field>
               <Field label="Description">
-                <textarea name="description" defaultValue={p.description} />
+                <Input.TextArea
+                  name="description"
+                  rows={3}
+                  defaultValue={p.description}
+                />
               </Field>
               <ProjectFields project={p} />
               <div className="form-grid">
                 <Field label="Board">
-                  <select name="board_type" defaultValue={p.board_type}>
-                    <option value="SCRUM">Scrum · sprints</option>
-                    <option value="KANBAN">Kanban · continuous flow</option>
-                  </select>
+                  <Select
+                    name="board_type"
+                    defaultValue={p.board_type}
+                    options={[
+                      { value: 'SCRUM', label: 'Scrum · sprints' },
+                      { value: 'KANBAN', label: 'Kanban · continuous flow' },
+                    ]}
+                  />
                 </Field>
                 <Field label="Status">
-                  <select name="status" defaultValue={p.status}>
-                    <option value="ACTIVE">Active</option>
-                    <option value="ARCHIVED">Archived</option>
-                  </select>
+                  <Select
+                    name="status"
+                    defaultValue={p.status}
+                    options={[
+                      { value: 'ACTIVE', label: 'Active' },
+                      { value: 'ARCHIVED', label: 'Archived' },
+                    ]}
+                  />
                 </Field>
               </div>
               {canManage && (
                 <div className="actions form-footer">
-                  <Button type="submit" disabled={save.isPending}>
+                  <Button type="submit" loading={save.isPending}>
                     Save changes
                   </Button>
                 </div>
               )}
-            </fieldset>
+            </ConfigProvider>
           </form>
-        </section>
-        <section className="card">
-          <h2>Members · {p.team.length}</h2>
+        </Card>
+        <Card className="card" title={`Members · ${p.team.length}`}>
           {p.team.map((m) => (
             <MemberRow
               key={m.user.id}
@@ -190,36 +200,32 @@ export default function ProjectSettingsPage() {
                 }
               }}
             >
-              <input
+              <Input
                 name="email"
                 type="email"
                 required
                 aria-label="Registered member email"
                 placeholder="Add a registered teammate by email"
               />
-              <select
+              <Select
                 name="role"
+                className="role-select"
                 aria-label="Project role"
                 defaultValue="DEVELOPER"
-              >
-                {projectRoles.map((r) => (
-                  <option key={r} value={r}>
-                    {label(r)}
-                  </option>
-                ))}
-              </select>
-              <Button type="submit" disabled={member.isPending}>
+                options={labelled(projectRoles)}
+              />
+              <Button type="submit" loading={member.isPending}>
                 Add member
               </Button>
             </form>
           )}
-        </section>
+        </Card>
       </div>
       {canManage && (
-        <section className="card danger-zone">
+        <Card className="card danger-zone">
           <div className="section-head">
             <div>
-              <h2>Delete project</h2>
+              <Typography.Title level={5}>Delete project</Typography.Title>
               <p className="muted">
                 Permanently removes every issue, sprint, test case and run.
               </p>
@@ -229,8 +235,9 @@ export default function ProjectSettingsPage() {
               disabled={del.isPending}
               onClick={async () => {
                 if (
-                  window.confirm(
+                  await confirm(
                     `Delete ${p.name} and all its issues, sprints and tests? This cannot be undone.`,
+                    { okText: 'Delete project' },
                   )
                 ) {
                   try {
@@ -245,7 +252,7 @@ export default function ProjectSettingsPage() {
               Delete project
             </Button>
           </div>
-        </section>
+        </Card>
       )}
     </>
   );

@@ -2,6 +2,21 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import {
+  Avatar,
+  Badge as Dot,
+  Drawer,
+  Empty,
+  Input,
+  List,
+  Typography,
+} from 'antd';
+import {
+  PaperClipOutlined,
+  PushpinOutlined,
+  SendOutlined,
+  TeamOutlined,
+} from '@ant-design/icons';
 import { useCurrentProject } from '../components/layout/AppShell';
 import { Button } from '../components/ui/button';
 import { State } from '../components/ui/shared';
@@ -37,9 +52,9 @@ function ProjectList({
   return (
     <aside className="chat-list">
       <div className="chat-list-head">
-        <h2>Project Chats</h2>
-        <input
-          type="search"
+        <Typography.Title level={5}>Project chats</Typography.Title>
+        <Input.Search
+          allowClear
           aria-label="Search project chats"
           placeholder="Search projects..."
           value={search}
@@ -53,11 +68,18 @@ function ProjectList({
             className={project.id === active ? 'selected' : ''}
             to={`/chat?project=${project.id}`}
           >
-            <span className="chat-dot" />
+            <Avatar shape="square" size={28} className="project-icon">
+              {project.key.slice(0, 2)}
+            </Avatar>
             <span>{project.name}</span>
           </Link>
         ))}
-        {visible.length === 0 && <p className="muted">No projects found.</p>}
+        {visible.length === 0 && (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="No projects found."
+          />
+        )}
       </nav>
     </aside>
   );
@@ -127,23 +149,24 @@ export default function ChatPage() {
   return (
     <div className="chat-page">
       <ProjectList projects={projects.data ?? []} active={projectId} />
-      <section className="chat-thread card">
+      <section className="chat-thread">
         <header className="chat-header">
           <div>
-            <h1>{project?.name ?? 'Project chat'}</h1>
-            <span className="muted">{online} online</span>
+            <Typography.Title level={4}>
+              {project?.name ?? 'Project chat'}
+            </Typography.Title>
+            <Dot status="success" text={`${online} online`} />
           </div>
           <div className="actions">
-            <button
-              type="button"
-              className="pin-button"
+            <Button
+              variant="ghost"
+              icon={<PushpinOutlined />}
               aria-label="Pinned messages"
               title="Pinned messages"
-            >
-              Pin
-            </button>
+            />
             <Button
               variant="outline"
+              icon={<TeamOutlined />}
               onClick={() => setMembersOpen((open) => !open)}
             >
               Members
@@ -163,7 +186,9 @@ export default function ChatPage() {
                 className={`chat-message ${mine ? 'mine' : ''}`}
                 key={message.id}
               >
-                <span className="mini-avatar">{initials(message.user)}</span>
+                <Avatar size={32} className="profile-avatar">
+                  {initials(message.user)}
+                </Avatar>
                 <div>
                   <span className="chat-author">{fullName(message.user)}</span>
                   <div className="chat-bubble">
@@ -177,45 +202,53 @@ export default function ChatPage() {
           <div ref={endRef} />
         </div>
         <form className="chat-composer" onSubmit={submit}>
-          <button type="button" aria-label="Attach file" title="Attach file">
-            +
-          </button>
-          <input
+          <Button
+            variant="ghost"
+            icon={<PaperClipOutlined />}
+            aria-label="Attach file"
+            title="Attach file"
+          />
+          <Input
             aria-label="Message"
+            size="large"
             placeholder="Type a message... (use @name to mention)"
             value={body}
             onChange={(e) => setBody(e.target.value)}
           />
-          <Button disabled={!body.trim() || send.isPending} type="submit">
+          <Button
+            disabled={!body.trim()}
+            loading={send.isPending}
+            icon={<SendOutlined />}
+            type="submit"
+          >
             Send
           </Button>
         </form>
       </section>
-      {membersOpen && project && (
-        <aside className="chat-members card">
-          <div className="section-head">
-            <h2>Members</h2>
-            <button
-              type="button"
-              aria-label="Close members"
-              onClick={() => setMembersOpen(false)}
-            >
-              x
-            </button>
-          </div>
-          {project.team.map((member) => (
-            <div className="member-row" key={member.user.id}>
-              <span className="mini-avatar">{initials(member.user)}</span>
-              <div>
-                <strong>{fullName(member.user)}</strong>
-                <span className="muted">
-                  {member.role.replaceAll('_', ' ')}
-                </span>
-              </div>
-            </div>
-          ))}
-        </aside>
-      )}
+      <Drawer
+        title="Members"
+        open={membersOpen && !!project}
+        onClose={() => setMembersOpen(false)}
+        size={320}
+      >
+        <List
+          dataSource={project?.team ?? []}
+          rowKey={(member) => member.user.id}
+          renderItem={(member) => (
+            <List.Item>
+              <List.Item.Meta
+                avatar={
+                  <Avatar className="profile-avatar">
+                    {initials(member.user)}
+                  </Avatar>
+                }
+                title={fullName(member.user)}
+                description={member.role.replaceAll('_', ' ')}
+              />
+            </List.Item>
+          )}
+        />
+      </Drawer>
     </div>
   );
 }

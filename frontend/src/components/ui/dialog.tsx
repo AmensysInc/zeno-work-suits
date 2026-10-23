@@ -1,4 +1,4 @@
-import * as D from '@radix-ui/react-dialog';
+import { Modal as AntModal } from 'antd';
 import type { ReactNode } from 'react';
 export function Modal({
   open,
@@ -14,22 +14,16 @@ export function Modal({
   wide?: boolean;
 }) {
   return (
-    <D.Root open={open} onOpenChange={(v) => !v && onClose()}>
-      <D.Portal>
-        <D.Overlay className="overlay" />
-        <D.Content
-          className={wide ? 'modal modal-wide' : 'modal'}
-          aria-describedby={undefined}
-        >
-          <div className="section-head">
-            <D.Title>{title}</D.Title>
-            <D.Close className="close" aria-label="Close">
-              ×
-            </D.Close>
-          </div>
-          {children}
-        </D.Content>
-      </D.Portal>
-    </D.Root>
+    <AntModal
+      open={open}
+      onCancel={onClose}
+      title={title}
+      footer={null}
+      width={wide ? 960 : 650}
+      destroyOnHidden
+      centered
+    >
+      {children}
+    </AntModal>
   );
 }

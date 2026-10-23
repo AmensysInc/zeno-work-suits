@@ -1,8 +1,48 @@
 import type { ReactNode } from 'react';
+import { Alert, Empty, Spin, Tag, Typography } from 'antd';
 import { label } from '../../types';
-export function Badge({ value }: { value: string }) {
+
+const tagColors: Record<string, string> = {
+  STORY: 'blue',
+  TODO: 'blue',
+  IN_PROGRESS: 'processing',
+  EPIC: 'purple',
+  TASK: 'geekblue',
+  SUBTASK: 'cyan',
+  CODE_REVIEW: 'purple',
+  BUG: 'red',
+  FAILED: 'error',
+  CRITICAL: 'red',
+  AT_RISK: 'error',
+  CLOSED: 'red',
+  DONE: 'success',
+  PASSED: 'success',
+  ACTIVE: 'success',
+  READY: 'success',
+  OPEN: 'success',
+  TESTING: 'warning',
+  HIGH: 'orange',
+  BLOCKED: 'warning',
+  MANAGER: 'gold',
+  GAP: 'warning',
+  ADMIN: 'purple',
+  MERGED: 'purple',
+  MEDIUM: 'blue',
+  LOW: 'default',
+};
+
+/** A colored tag for an enum value; `children` overrides its label. */
+export function Badge({
+  value,
+  children,
+}: {
+  value: string;
+  children?: ReactNode;
+}) {
   return (
-    <span className={`badge badge-${value.toLowerCase()}`}>{label(value)}</span>
+    <Tag color={tagColors[value.toUpperCase()]} variant="filled">
+      {children ?? label(value)}
+    </Tag>
   );
 }
 export function PageHeader({
@@ -17,8 +57,10 @@ export function PageHeader({
   return (
     <div className="page-heading">
       <div>
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
+        <Typography.Title level={3}>{title}</Typography.Title>
+        {description && (
+          <Typography.Text type="secondary">{description}</Typography.Text>
+        )}
       </div>
       <div className="actions">{children}</div>
     </div>
@@ -36,20 +78,24 @@ export function State({
   if (loading)
     return (
       <div className="empty" role="status">
-        Loading…
+        <Spin />
       </div>
     );
   if (error)
     return (
-      <div className="empty error" role="alert">
-        Unable to load this page. Please refresh and try again.
-      </div>
+      <Alert
+        type="error"
+        showIcon
+        role="alert"
+        title="Unable to load this page. Please refresh and try again."
+      />
     );
   if (empty)
     return (
-      <div className="empty">
-        Nothing here yet. Create your first item to get started.
-      </div>
+      <Empty
+        className="empty"
+        description="Nothing here yet. Create your first item to get started."
+      />
     );
   return null;
 }

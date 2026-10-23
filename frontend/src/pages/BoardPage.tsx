@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { Card, Empty } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { useData, useIssues } from '../hooks/data';
 import type { Project, Sprint } from '../types';
 import { PageHeader, State } from '../components/ui/shared';
-import { Button } from '../components/ui/button';
+import { Button, LinkButton } from '../components/ui/button';
 import KanbanBoard from '../components/board/KanbanBoard';
 import WorkItemFilters, {
   useFilters,
@@ -58,14 +60,17 @@ export default function BoardPage() {
         }
       >
         {kanban ? (
-          <Button onClick={() => create({ project_id: pid })}>
-            + Create issue
+          <Button
+            icon={<PlusOutlined />}
+            onClick={() => create({ project_id: pid })}
+          >
+            Create issue
           </Button>
         ) : (
           <>
-            <Button asChild variant="outline">
-              <Link to={`/projects/${pid}/sprints`}>Sprint planning</Link>
-            </Button>
+            <LinkButton variant="outline" to={`/projects/${pid}/sprints`}>
+              Sprint planning
+            </LinkButton>
             {active && (
               <Button onClick={() => setCompleting(true)}>
                 Complete sprint
@@ -89,13 +94,21 @@ export default function BoardPage() {
         </>
       )}
       {!showBoard && !loading && (
-        <section className="card empty">
-          <h2>No active sprint</h2>
-          <p>Plan a sprint, add issues, and start when your team is ready.</p>
-          <Button asChild>
-            <Link to={`/projects/${pid}/backlog`}>Go to backlog</Link>
-          </Button>
-        </section>
+        <Card className="card">
+          <Empty
+            description={
+              <>
+                <strong>No active sprint</strong>
+                <br />
+                Plan a sprint, add issues, and start when your team is ready.
+              </>
+            }
+          >
+            <LinkButton to={`/projects/${pid}/backlog`}>
+              Go to backlog
+            </LinkButton>
+          </Empty>
+        </Card>
       )}
       {completing && active && (
         <CompleteSprintModal

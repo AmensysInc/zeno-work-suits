@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
+import { Card, Empty, Table, Typography } from 'antd';
 import { useData } from '../hooks/data';
 import {
   priorities,
@@ -10,7 +11,7 @@ import {
 } from '../types';
 import { fullName, healthLabel, isOpen, percent, storyHealth } from '../lib/qa';
 import { PageHeader, State, Badge } from '../components/ui/shared';
-import { Button } from '../components/ui/button';
+import { LinkButton } from '../components/ui/button';
 import { BarChart, Kpi, Progress } from '../components/ui/charts';
 
 export default function QaDashboardPage() {
@@ -43,12 +44,10 @@ export default function QaDashboardPage() {
         title="QA Dashboard"
         description={`Quality at a glance for ${project.data?.name ?? 'this project'}.`}
       >
-        <Button asChild variant="outline">
-          <Link to={`/projects/${pid}/traceability`}>Traceability</Link>
-        </Button>
-        <Button asChild>
-          <Link to={`/projects/${pid}/test-runs`}>Run tests</Link>
-        </Button>
+        <LinkButton variant="outline" to={`/projects/${pid}/traceability`}>
+          Traceability
+        </LinkButton>
+        <LinkButton to={`/projects/${pid}/test-runs`}>Run tests</LinkButton>
       </PageHeader>
       <div className="kpis kpis-6">
         <Kpi
@@ -96,83 +95,75 @@ export default function QaDashboardPage() {
           hint="covered, passing, no open bugs"
         />
       </div>
-      <section className="card">
-        <h2>Latest test results</h2>
+      <Card className="card" title="Latest test results">
         <Progress
           rows={testStatuses.map((s) => ({ key: s, count: count(s) }))}
         />
-      </section>
+      </Card>
       <div className="dashboard-detail">
-        <section className="card">
-          <div className="section-head">
-            <h2>Stories needing attention</h2>
-            <Link to={`/projects/${pid}/traceability`}>View all →</Link>
-          </div>
+        <Card
+          className="card"
+          title="Stories needing attention"
+          extra={<Link to={`/projects/${pid}/traceability`}>View all →</Link>}
+        >
           {!atRisk.length ? (
-            <div className="empty">
-              Every story is covered, passing and free of open bugs.
-            </div>
+            <Empty description="Every story is covered, passing and free of open bugs." />
           ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Story</th>
-                    <th>Summary</th>
-                    <th>Criteria</th>
-                    <th>Failing</th>
-                    <th>Open bugs</th>
-                    <th>Health</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {atRisk.slice(0, 8).map((s) => {
+            <Table
+              rowKey="id"
+              size="middle"
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+              dataSource={atRisk.slice(0, 8)}
+              columns={[
+                {
+                  title: 'Story',
+                  dataIndex: 'issue_key',
+                  render: (key, s) => (
+                    <Link to={`/projects/${pid}/traceability?story=${s.id}`}>
+                      {key}
+                    </Link>
+                  ),
+                },
+                {
+                  title: 'Summary',
+                  dataIndex: 'summary',
+                  render: (summary, s) => (
+                    <Link className="summary-link" to={`/issues/${s.id}`}>
+                      {summary}
+                    </Link>
+                  ),
+                },
+                {
+                  title: 'Criteria',
+                  key: 'criteria',
+                  render: (_, s) =>
+                    `${s.criteria.filter((c) => c.test_case_ids.length).length}/${s.criteria.length}`,
+                },
+                {
+                  title: 'Failing',
+                  key: 'failing',
+                  render: (_, s) =>
+                    `${s.test_cases.filter((t) => ['FAILED', 'BLOCKED'].includes(t.status)).length}/${s.test_cases.length}`,
+                },
+                {
+                  title: 'Open bugs',
+                  key: 'bugs',
+                  render: (_, s) =>
+                    s.bugs.filter((b) => isOpen(b.status)).length,
+                },
+                {
+                  title: 'Health',
+                  key: 'health',
+                  render: (_, s) => {
                     const health = storyHealth(s);
-                    return (
-                      <tr key={s.id}>
-                        <td className="key">
-                          <Link
-                            to={`/projects/${pid}/traceability?story=${s.id}`}
-                          >
-                            {s.issue_key}
-                          </Link>
-                        </td>
-                        <td>
-                          <Link to={`/issues/${s.id}`}>{s.summary}</Link>
-                        </td>
-                        <td className="muted">
-                          {
-                            s.criteria.filter((c) => c.test_case_ids.length)
-                              .length
-                          }
-                          /{s.criteria.length}
-                        </td>
-                        <td className="muted">
-                          {
-                            s.test_cases.filter((t) =>
-                              ['FAILED', 'BLOCKED'].includes(t.status),
-                            ).length
-                          }
-                          /{s.test_cases.length}
-                        </td>
-                        <td className="muted">
-                          {s.bugs.filter((b) => isOpen(b.status)).length}
-                        </td>
-                        <td>
-                          <span
-                            className={`badge badge-${health.toLowerCase()}`}
-                          >
-                            {healthLabel[health]}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    return <Badge value={health}>{healthLabel[health]}</Badge>;
+                  },
+                },
+              ]}
+            />
           )}
-        </section>
+        </Card>
         <div className="chart-grid">
           <BarChart
             title="Open defects by priority"
@@ -195,45 +186,53 @@ export default function QaDashboardPage() {
           />
         </div>
       </div>
-      <section className="card">
-        <h2>Recent test runs</h2>
+      <Card className="card" title="Recent test runs">
         {!runs.data.length ? (
-          <div className="empty">
-            No tests have been run yet. Open the execution board to start.
-          </div>
+          <Empty description="No tests have been run yet. Open the execution board to start." />
         ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Test case</th>
-                  <th>Result</th>
-                  <th>Tester</th>
-                  <th>Actual result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.data.slice(0, 8).map((r) => (
-                  <tr key={r.id}>
-                    <td className="muted">{r.executed_on}</td>
-                    <td>
-                      <Link to={`/test-cases/${r.test_case_id}#run-${r.id}`}>
-                        {r.test_case_key} · {r.test_case_title}
-                      </Link>
-                    </td>
-                    <td>
-                      <Badge value={r.status} />
-                    </td>
-                    <td className="muted">{fullName(r.tester)}</td>
-                    <td className="muted wrap">{r.actual_result || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            rowKey="id"
+            size="middle"
+            pagination={false}
+            scroll={{ x: 'max-content' }}
+            dataSource={runs.data.slice(0, 8)}
+            columns={[
+              {
+                title: 'Date',
+                dataIndex: 'executed_on',
+                render: (v) => (
+                  <Typography.Text type="secondary">{v}</Typography.Text>
+                ),
+              },
+              {
+                title: 'Test case',
+                key: 'test',
+                render: (_, r) => (
+                  <Link to={`/test-cases/${r.test_case_id}#run-${r.id}`}>
+                    {r.test_case_key} · {r.test_case_title}
+                  </Link>
+                ),
+              },
+              {
+                title: 'Result',
+                dataIndex: 'status',
+                render: (v) => <Badge value={v} />,
+              },
+              {
+                title: 'Tester',
+                key: 'tester',
+                render: (_, r) => fullName(r.tester),
+              },
+              {
+                title: 'Actual result',
+                dataIndex: 'actual_result',
+                className: 'wrap',
+                render: (v) => v || '—',
+              },
+            ]}
+          />
         )}
-      </section>
+      </Card>
     </>
   );
 }

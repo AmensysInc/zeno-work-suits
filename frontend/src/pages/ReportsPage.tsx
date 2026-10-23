@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Card, Table } from 'antd';
 import { useData } from '../hooks/data';
 import type { ProjectReport, Sprint } from '../types';
 import { fullName, percent } from '../lib/qa';
 import { PageHeader, State } from '../components/ui/shared';
 import { BarChart, Kpi } from '../components/ui/charts';
+import { Select } from '../components/ui/form';
 
 type Series = { key: string; name: string };
 
@@ -20,8 +22,7 @@ function ColumnChart({
 }) {
   const max = Math.max(1, ...groups.flatMap((g) => g.values));
   return (
-    <section className="card chart">
-      <h2>{title}</h2>
+    <Card className="card chart" title={title}>
       {groups.length === 0 ? (
         <p className="muted">No data yet.</p>
       ) : (
@@ -51,7 +52,7 @@ function ColumnChart({
           </span>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -165,23 +166,20 @@ export default function ReportsPage() {
         />
       </div>
       <div className="chart-grid-2">
-        <section className="card">
-          <div className="section-head">
-            <h2>Sprint burndown</h2>
-            <select
+        <Card
+          className="card"
+          title="Sprint burndown"
+          extra={
+            <Select
               aria-label="Burndown sprint"
               className="inline-select"
+              placeholder="No started sprints"
               value={sprintId || r.burndown?.sprint_id || ''}
-              onChange={(e) => setSprintId(e.target.value)}
-            >
-              {!started.length && <option value="">No started sprints</option>}
-              {started.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              onChange={setSprintId}
+              options={started.map((x) => ({ value: x.id, label: x.name }))}
+            />
+          }
+        >
           {r.burndown ? (
             <Burndown data={r.burndown} />
           ) : (
@@ -189,7 +187,7 @@ export default function ReportsPage() {
               Start a sprint with start and end dates to see its burndown.
             </p>
           )}
-        </section>
+        </Card>
         <ColumnChart
           title="Velocity · story points"
           series={[
@@ -220,33 +218,26 @@ export default function ReportsPage() {
         <BarChart title="Work items by priority" rows={r.by_priority} />
         <BarChart title="Work items by type" rows={r.by_type} />
       </div>
-      <section className="card">
-        <h2>Team workload</h2>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Assignee</th>
-                <th>Open items</th>
-                <th>Open points</th>
-                <th>In flight</th>
-                <th>Done</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.workload.map((w) => (
-                <tr key={w.user?.id ?? 'none'}>
-                  <td>{fullName(w.user)}</td>
-                  <td>{w.open_issues}</td>
-                  <td>{w.open_points}</td>
-                  <td>{w.in_progress}</td>
-                  <td>{w.done_issues}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <Card className="card" title="Team workload">
+        <Table
+          rowKey={(w) => w.user?.id ?? 'none'}
+          size="middle"
+          pagination={false}
+          dataSource={r.workload}
+          scroll={{ x: 'max-content' }}
+          columns={[
+            {
+              title: 'Assignee',
+              key: 'user',
+              render: (_, w) => fullName(w.user),
+            },
+            { title: 'Open items', dataIndex: 'open_issues' },
+            { title: 'Open points', dataIndex: 'open_points' },
+            { title: 'In flight', dataIndex: 'in_progress' },
+            { title: 'Done', dataIndex: 'done_issues' },
+          ]}
+        />
+      </Card>
     </>
   );
 }

@@ -1,5 +1,7 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Tabs } from 'antd';
 import { useProjects } from '../hooks/data';
+import { Select } from '../components/ui/form';
 import { PageHeader, State } from '../components/ui/shared';
 import TestCaseList from '../components/testing/TestCaseList';
 import SharedStepsLibrary from '../components/testing/SharedStepsLibrary';
@@ -28,32 +30,25 @@ export default function TestCasesPage() {
         title="Test Repository"
         description="Every test case and reusable step, organized by project."
       >
-        <select
+        <Select
           aria-label="Project"
-          value={projectId ?? ''}
-          onChange={(e) => set('project', e.target.value)}
-        >
-          {projects.data?.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+          className="inline-select"
+          value={projectId}
+          onChange={(v) => set('project', v)}
+          options={(projects.data ?? []).map((p) => ({
+            value: p.id,
+            label: p.name,
+          }))}
+        />
       </PageHeader>
-      <div className="tabs">
-        <button
-          className={tab === 'tests' ? 'selected' : ''}
-          onClick={() => set('tab', 'tests')}
-        >
-          Test cases
-        </button>
-        <button
-          className={tab === 'steps' ? 'selected' : ''}
-          onClick={() => set('tab', 'steps')}
-        >
-          Reusable steps
-        </button>
-      </div>
+      <Tabs
+        activeKey={tab}
+        onChange={(v) => set('tab', v)}
+        items={[
+          { key: 'tests', label: 'Test cases' },
+          { key: 'steps', label: 'Reusable steps' },
+        ]}
+      />
       {!projectId ? (
         <State
           loading={projects.isLoading}

@@ -1,11 +1,11 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
+import { Alert, Input } from 'antd';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useData, useProjects, useSave } from '../../hooks/data';
 import {
   issueTypes,
   priorities,
-  label,
   type Issue,
   type Project,
   type Sprint,
@@ -13,6 +13,7 @@ import {
 import { Modal } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Field } from '../ui/shared';
+import { Select, labelled, type Option } from '../ui/form';
 const nullable = z.preprocess(
   (v) => (v === '' || v === null || v === undefined ? null : Number(v)),
   z.number().nullable(),
@@ -40,7 +41,7 @@ export default function CreateIssueModal({
 }) {
   const projects = useProjects();
   const {
-    register,
+    control,
     handleSubmit,
     watch,
     setValue,
@@ -69,6 +70,32 @@ export default function CreateIssueModal({
     initial.id ? `/issues/${initial.id}` : '/issues',
     initial.id ? 'put' : 'post',
     initial.id ? 'Issue updated' : 'Issue created',
+  );
+  /** A select bound to one form field. */
+  const pick = (
+    name:
+      'epic_id' | 'parent_issue_id' | 'assignee_id' | 'priority' | 'sprint_id',
+    options: Option[],
+  ) => (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <Select
+          value={field.value}
+          onChange={field.onChange}
+          options={options}
+        />
+      )}
+    />
+  );
+  /** A text input bound to one form field. */
+  const text = (name: 'summary' | 'labels', autoFocus = false) => (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => <Input autoFocus={autoFocus} {...field} />}
+    />
   );
   return (
     <Modal
@@ -109,22 +136,29 @@ export default function CreateIssueModal({
         })}
       >
         {initial.related_test_case_id && (
-          <p className="linked-context">
-            Linked story:{' '}
-            {issues.data?.find((i) => i.id === initial.related_issue_id)
-              ?.issue_key ?? initial.related_issue_id}
-            {' · '}Test case #{initial.related_test_case_id}
-            {initial.related_execution_id &&
-              ` · Test run #${initial.related_execution_id}`}
-          </p>
+          <Alert
+            className="linked-context"
+            type="info"
+            title={
+              <>
+                Linked story:{' '}
+                {issues.data?.find((i) => i.id === initial.related_issue_id)
+                  ?.issue_key ?? initial.related_issue_id}
+                {' · '}Test case #{initial.related_test_case_id}
+                {initial.related_execution_id &&
+                  ` · Test run #${initial.related_execution_id}`}
+              </>
+            }
+          />
         )}
         <div className="form-grid">
           <Field label="Project">
-            <select
-              {...register('project_id')}
+            <Select
+              value={pid || null}
+              placeholder="Select project"
               disabled={!!initial.id}
-              onChange={(e) => {
-                setValue('project_id', Number(e.target.value));
+              onChange={(v) => {
+                setValue('project_id', Number(v));
                 for (const field of [
                   'epic_id',
                   'parent_issue_id',
@@ -133,26 +167,28 @@ export default function CreateIssueModal({
                 ] as const)
                   setValue(field, null);
               }}
-            >
-              <option value="">Select project</option>
-              {projects.data?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              options={(projects.data ?? []).map((p) => ({
+                value: p.id,
+                label: p.name,
+              }))}
+            />
           </Field>
           <Field label="Issue type">
-            <select {...register('issue_type')} disabled={!!initial.id}>
-              {issueTypes.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
+            <Controller
+              control={control}
+              name="issue_type"
+              render={({ field }) => (
+                <Select
+                  value={field.value}
+                  onChange={field.onChange}
+                  disabled={!!initial.id}
+                  options={labelled(issueTypes)}
+                />
+              )}
+            />
           </Field>
         </div>
-        <Field label="Summary">
-          <input autoFocus {...register('summary')} />
-        </Field>
+        <Field label="Summary">{text('summary', true)}</Field>
         {watch('issue_type') === 'STORY' && (
           <Button
             variant="ghost"
@@ -169,79 +205,71 @@ So that [business value].`,
           </Button>
         )}
         <Field label="Description · Markdown supported">
-          <textarea
-            rows={4}
-            {...register('description')}
-            placeholder="Describe the work, context, and expected outcome…"
+          <Controller
+            control={control}
+            name="description"
+            render={({ field }) => (
+              <Input.TextArea
+                rows={4}
+                {...field}
+                placeholder="Describe the work, context, and expected outcome…"
+              />
+            )}
           />
         </Field>
         <div className="form-grid">
           <Field label="Epic">
-            <select {...register('epic_id')}>
-              <option value="">None</option>
-              {issues.data
-                ?.filter((i) => i.issue_type === 'EPIC' && i.id !== initial.id)
-                .map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.summary}
-                  </option>
-                ))}
-            </select>
+            {pick('epic_id', [
+              { value: '', label: 'None' },
+              ...(issues.data ?? [])
+                .filter((i) => i.issue_type === 'EPIC' && i.id !== initial.id)
+                .map((i) => ({ value: i.id, label: i.summary })),
+            ])}
           </Field>
           <Field label="Parent issue (subtasks)">
-            <select {...register('parent_issue_id')}>
-              <option value="">None</option>
-              {issues.data
-                ?.filter(
+            {pick('parent_issue_id', [
+              { value: '', label: 'None' },
+              ...(issues.data ?? [])
+                .filter(
                   (i) =>
                     ['STORY', 'TASK', 'BUG'].includes(i.issue_type) &&
                     i.id !== initial.id,
                 )
-                .map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.issue_key} — {i.summary}
-                  </option>
-                ))}
-            </select>
+                .map((i) => ({
+                  value: i.id,
+                  label: `${i.issue_key} — ${i.summary}`,
+                })),
+            ])}
           </Field>
           <Field label="Assignee">
-            <select {...register('assignee_id')}>
-              <option value="">Unassigned</option>
-              {project.data?.members.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.first_name} {u.last_name}
-                </option>
-              ))}
-            </select>
+            {pick('assignee_id', [
+              { value: '', label: 'Unassigned' },
+              ...(project.data?.members ?? []).map((u) => ({
+                value: u.id,
+                label: `${u.first_name} ${u.last_name}`,
+              })),
+            ])}
           </Field>
           <Field label="Priority">
-            <select {...register('priority')}>
-              {priorities.map((p) => (
-                <option key={p} value={p}>
-                  {label(p)}
-                </option>
-              ))}
-            </select>
+            {pick('priority', labelled(priorities))}
           </Field>
           <Field label="Story points">
-            <input type="number" min="0" {...register('story_points')} />
+            <Controller
+              control={control}
+              name="story_points"
+              render={({ field }) => <Input type="number" min="0" {...field} />}
+            />
           </Field>
           <Field label="Sprint">
-            <select {...register('sprint_id')}>
-              <option value="">Backlog</option>
-              {sprints.data
-                ?.filter((s) => s.status !== 'COMPLETED')
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
+            {pick('sprint_id', [
+              { value: '', label: 'Backlog' },
+              ...(sprints.data ?? [])
+                .filter((s) => s.status !== 'COMPLETED')
+                .map((s) => ({ value: s.id, label: s.name })),
+            ])}
           </Field>
         </div>
-        <Field label="Labels · separated by commas">
-          <input {...register('labels')} />
-        </Field>
+        <Field label="Labels · separated by commas">{text('labels')}</Field>
         {Object.values(errors).map((e, i) => (
           <p className="error" key={i}>
             {e.message}
@@ -251,12 +279,8 @@ So that [business value].`,
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={save.isPending}>
-            {save.isPending
-              ? 'Saving…'
-              : initial.id
-                ? 'Save changes'
-                : 'Create issue'}
+          <Button type="submit" loading={save.isPending}>
+            {initial.id ? 'Save changes' : 'Create issue'}
           </Button>
         </div>
       </form>

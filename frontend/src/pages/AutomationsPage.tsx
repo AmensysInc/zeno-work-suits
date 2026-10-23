@@ -1,8 +1,15 @@
 import { useState } from 'react';
+import { Card, Input, Typography } from 'antd';
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { useData, useProjects, useSave } from '../hooks/data';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
-import { Badge, Field, State } from '../components/ui/shared';
+import { Badge, Field, PageHeader, State } from '../components/ui/shared';
+import { Select, labelled } from '../components/ui/form';
 import {
   automationActions,
   statuses,
@@ -22,7 +29,9 @@ function RuleCard({ rule }: { rule: AutomationRule }) {
   return (
     <article className="automation-rule">
       <div>
-        <h2>{rule.name}</h2>
+        <Typography.Title level={5}>
+          <ThunderboltOutlined className="automation-icon" /> {rule.name}
+        </Typography.Title>
         <p className="muted">
           {rule.project?.name ?? 'All projects'} / Status changes to{' '}
           {label(rule.to_status)} / {actionText[rule.action]}
@@ -32,6 +41,7 @@ function RuleCard({ rule }: { rule: AutomationRule }) {
         <Badge value={rule.enabled ? 'ACTIVE' : 'INACTIVE'} />
         <Button
           variant="ghost"
+          icon={<DeleteOutlined />}
           disabled={del.isPending}
           onClick={() => del.mutate({})}
         >
@@ -49,20 +59,16 @@ export default function AutomationsPage() {
   const create = useSave('/automations', 'post', 'Automation rule created');
   return (
     <>
-      <div className="automation-heading">
-        <div>
-          <h1>
-            <span className="automation-icon" aria-hidden="true">
-              A
-            </span>
-            Automations
-          </h1>
-          <p>Run actions automatically when tickets change.</p>
-        </div>
-        <Button onClick={() => setOpen(true)}>+ New Rule</Button>
-      </div>
+      <PageHeader
+        title="Automations"
+        description="Run actions automatically when tickets change."
+      >
+        <Button icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+          New rule
+        </Button>
+      </PageHeader>
 
-      <section className="automation-card">
+      <Card className="card automation-card">
         <State
           loading={rules.isLoading}
           error={rules.error}
@@ -71,7 +77,7 @@ export default function AutomationsPage() {
         {rules.data?.map((rule) => (
           <RuleCard key={rule.id} rule={rule} />
         ))}
-      </section>
+      </Card>
 
       <Modal
         open={open}
@@ -98,7 +104,7 @@ export default function AutomationsPage() {
           }}
         >
           <Field label="Name">
-            <input
+            <Input
               name="name"
               required
               maxLength={200}
@@ -107,39 +113,43 @@ export default function AutomationsPage() {
             />
           </Field>
           <Field label="Project (optional)">
-            <select name="project_id" defaultValue="">
-              <option value="">All projects</option>
-              {projects.data?.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              name="project_id"
+              defaultValue=""
+              options={[
+                { value: '', label: 'All projects' },
+                ...(projects.data ?? []).map((project) => ({
+                  value: project.id,
+                  label: project.name,
+                })),
+              ]}
+            />
           </Field>
           <div className="automation-grid">
             <Field label="When">
-              <select name="trigger" defaultValue="STATUS_CHANGED" disabled>
-                <option value="STATUS_CHANGED">Status changes</option>
-              </select>
+              <Select
+                defaultValue="STATUS_CHANGED"
+                disabled
+                options={[{ value: 'STATUS_CHANGED', label: 'Status changes' }]}
+              />
             </Field>
             <Field label="To status">
-              <select name="to_status" defaultValue="IN_PROGRESS">
-                {statuses.map((status) => (
-                  <option key={status} value={status}>
-                    {label(status)}
-                  </option>
-                ))}
-              </select>
+              <Select
+                name="to_status"
+                defaultValue="IN_PROGRESS"
+                options={labelled(statuses)}
+              />
             </Field>
           </div>
           <Field label="Then">
-            <select name="action" defaultValue="NOTIFY_REPORTER">
-              {automationActions.map((action) => (
-                <option key={action} value={action}>
-                  {actionText[action]}
-                </option>
-              ))}
-            </select>
+            <Select
+              name="action"
+              defaultValue="NOTIFY_REPORTER"
+              options={automationActions.map((action) => ({
+                value: action,
+                label: actionText[action],
+              }))}
+            />
           </Field>
           <div className="form-footer actions">
             <Button
@@ -149,7 +159,7 @@ export default function AutomationsPage() {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending}>
+            <Button type="submit" loading={create.isPending}>
               Create
             </Button>
           </div>

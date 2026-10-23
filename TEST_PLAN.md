@@ -1,4 +1,4 @@
-# Zeno Work Suite — Test Plan
+# Zeno TeamSuite — Test Plan
 
 Detailed manual and automated test plan for the whole application (backend API + React frontend).
 Each test case has an ID, steps, and expected result. Mark **Result** as Pass / Fail / Blocked and note the build or commit tested.
