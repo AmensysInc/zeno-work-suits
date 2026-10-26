@@ -32,7 +32,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-["https://zenoteamsuite.com","https://www.zenoteamsuite.com"]}
       SONIX_API_KEY: ${SONIX_API_KEY:-}
-      APP_URL: ${APP_URL:-https://zenoworksuite.com}
+      APP_URL: ${APP_URL:-https://zenoteamsuite.com}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
