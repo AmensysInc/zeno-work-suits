@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Card, Input, Statistic, Table, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { useData } from '../../hooks/data';
 import type { Issue, TestCase } from '../../types';
-import { label, testStatuses, testTypes } from '../../types';
+import { testStatuses, testTypes } from '../../types';
 import { Badge, State } from '../ui/shared';
-import { Button } from '../ui/button';
+import { LinkButton } from '../ui/button';
+import { Select, labelled } from '../ui/form';
 /** Story test cases, or (with projectId) the filterable project repository. */
 export default function TestCaseList({
   issueId,
@@ -49,66 +52,60 @@ export default function TestCaseList({
           ['Blocked', all.filter((t) => t.status === 'BLOCKED').length],
           ['Not run', all.filter((t) => t.status === 'NOT_RUN').length],
         ].map(([name, n]) => (
-          <div key={name}>
-            <strong>{n}</strong>
-            <span>{name}</span>
-          </div>
+          <Statistic key={name} title={name} value={n} />
         ))}
       </div>
-      <section className="card">
-        <div className="section-head">
-          <h2>Test cases</h2>
-          <Button asChild>
-            <Link to={`/test-cases/new${issueId ? `?story=${issueId}` : ''}`}>
-              + Add test case
-            </Link>
-          </Button>
-        </div>
+      <Card
+        className="card"
+        title="Test cases"
+        extra={
+          <LinkButton
+            icon={<PlusOutlined />}
+            to={`/test-cases/new${issueId ? `?story=${issueId}` : ''}`}
+          >
+            Add test case
+          </LinkButton>
+        }
+      >
         {projectId && (
           <div className="filters">
-            <input
-              type="search"
+            <Input.Search
+              allowClear
               aria-label="Search test cases"
               placeholder="Search by key or title…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <select
+            <Select
               aria-label="Filter by story"
               value={story}
-              onChange={(e) => setStory(Number(e.target.value))}
-            >
-              <option value={0}>All stories</option>
-              {stories.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.issue_key} — {s.summary}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={(v) => setStory(Number(v))}
+              options={[
+                { value: 0, label: 'All stories' },
+                ...stories.map((s) => ({
+                  value: s.id,
+                  label: `${s.issue_key} — ${s.summary}`,
+                })),
+              ]}
+            />
+            <Select
               aria-label="Filter by result"
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="">All results</option>
-              {testStatuses.map((s) => (
-                <option key={s} value={s}>
-                  {label(s)}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setStatus}
+              options={[
+                { value: '', label: 'All results' },
+                ...labelled(testStatuses),
+              ]}
+            />
+            <Select
               aria-label="Filter by type"
               value={type}
-              onChange={(e) => setType(e.target.value)}
-            >
-              <option value="">All types</option>
-              {testTypes.map((s) => (
-                <option key={s} value={s}>
-                  {label(s)}
-                </option>
-              ))}
-            </select>
+              onChange={setType}
+              options={[
+                { value: '', label: 'All types' },
+                ...labelled(testTypes),
+              ]}
+            />
           </div>
         )}
         <State
@@ -117,56 +114,79 @@ export default function TestCaseList({
           empty={items.length === 0 && !query.isLoading}
         />
         {!!items.length && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Title</th>
-                  {projectId && <th>Story</th>}
-                  <th>Type</th>
-                  <th>Covers</th>
-                  <th>Steps</th>
-                  <th>Last run</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((t) => (
-                  <tr key={t.id}>
-                    <td className="key">
-                      <Link to={`/test-cases/${t.id}`}>{t.test_case_key}</Link>
-                    </td>
-                    <td>
-                      <Link to={`/test-cases/${t.id}`}>{t.title}</Link>
-                    </td>
-                    {projectId && (
-                      <td className="key">
+          <Table
+            rowKey="id"
+            size="middle"
+            dataSource={items}
+            scroll={{ x: 'max-content' }}
+            pagination={{ pageSize: 25, hideOnSinglePage: true }}
+            columns={[
+              {
+                title: 'Key',
+                dataIndex: 'test_case_key',
+                render: (key, t) => (
+                  <Link to={`/test-cases/${t.id}`}>{key}</Link>
+                ),
+              },
+              {
+                title: 'Title',
+                dataIndex: 'title',
+                render: (title, t) => (
+                  <Link className="summary-link" to={`/test-cases/${t.id}`}>
+                    {title}
+                  </Link>
+                ),
+              },
+              ...(projectId
+                ? [
+                    {
+                      title: 'Story',
+                      key: 'story',
+                      render: (_: unknown, t: TestCase) => (
                         <Link to={`/issues/${t.issue_id}`}>
                           {stories.find((s) => s.id === t.issue_id)?.issue_key}
                         </Link>
-                      </td>
-                    )}
-                    <td>
-                      <Badge value={t.test_type} />
-                    </td>
-                    <td className={t.criterion_ids.length ? 'muted' : 'warn'}>
-                      {t.criterion_ids.length
-                        ? `${t.criterion_ids.length} criteria`
-                        : 'None'}
-                    </td>
-                    <td className="muted">{t.steps.length}</td>
-                    <td className="muted">{t.last_executed_on ?? 'Never'}</td>
-                    <td>
-                      <Badge value={t.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                title: 'Type',
+                dataIndex: 'test_type',
+                render: (v) => <Badge value={v} />,
+              },
+              {
+                title: 'Covers',
+                key: 'covers',
+                render: (_, t) => (
+                  <Typography.Text
+                    type={t.criterion_ids.length ? 'secondary' : 'warning'}
+                  >
+                    {t.criterion_ids.length
+                      ? `${t.criterion_ids.length} criteria`
+                      : 'None'}
+                  </Typography.Text>
+                ),
+              },
+              {
+                title: 'Steps',
+                key: 'steps',
+                render: (_, t) => t.steps.length,
+              },
+              {
+                title: 'Last run',
+                dataIndex: 'last_executed_on',
+                render: (v) => v ?? 'Never',
+              },
+              {
+                title: 'Result',
+                dataIndex: 'status',
+                render: (v) => <Badge value={v} />,
+              },
+            ]}
+          />
         )}
-      </section>
+      </Card>
     </>
   );
 }

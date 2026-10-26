@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { Input } from 'antd';
+import { Button } from '../ui/button';
+import { Select } from '../ui/form';
 import {
   issueTypes,
   label,
@@ -105,8 +108,8 @@ export default function WorkItemFilters({
   };
   return (
     <div className="filters" role="search">
-      <input
-        type="search"
+      <Input.Search
+        allowClear
         aria-label="Search work items"
         placeholder="Search key, summary or label…"
         value={filters.search}
@@ -115,25 +118,22 @@ export default function WorkItemFilters({
       {fields.map((field) => {
         const [all, values] = options[field];
         return (
-          <select
+          <Select
             key={field}
             aria-label={`Filter by ${field}`}
             value={filters[field]}
-            onChange={(e) => set({ [field]: e.target.value })}
-          >
-            <option value="">{all}</option>
-            {values.map(([value, text]) => (
-              <option key={value} value={value}>
-                {text}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set({ [field]: v })}
+            options={[
+              { value: '', label: all },
+              ...values.map(([value, text]) => ({ value, label: text })),
+            ]}
+          />
         );
       })}
       {active && (
-        <button className="link" onClick={reset}>
+        <Button variant="ghost" onClick={reset}>
           Clear filters
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -96,6 +96,13 @@ export interface GitHubPull {
   created_at: string;
   updated_at: string;
 }
+export interface GitHubCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  html_url: string;
+}
 /** "owner/name" for a linked https://github.com/owner/name URL. */
 export const repoName = (url: string) =>
   url.match(/^https:\/\/github\.com\/([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/)?.[1];

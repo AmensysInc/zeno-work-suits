@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Alert, Card, Input, Spin } from 'antd';
+import { AudioOutlined, StopOutlined } from '@ant-design/icons';
 import { api, errorMessage } from '../services/api';
 import { Button } from '../components/ui/button';
 import { PageHeader } from '../components/ui/shared';
@@ -86,34 +88,40 @@ export default function VoiceAgentPage() {
         title="Voice Agent"
         description="Record a voice note, transcribe it with Sonix, and turn it into an issue."
       />
-      <section className="card voice-agent">
+      <Card className="card voice-agent">
         <div className="voice-controls">
           {phase === 'recording' ? (
-            <Button variant="destructive" onClick={stop}>
-              ■ Stop recording ({seconds}s)
+            <Button
+              variant="destructive"
+              icon={<StopOutlined />}
+              onClick={stop}
+            >
+              Stop recording ({seconds}s)
             </Button>
           ) : (
-            <Button onClick={start} disabled={busy}>
-              ● Start recording
+            <Button
+              icon={<AudioOutlined />}
+              size="large"
+              onClick={start}
+              disabled={busy}
+            >
+              Start recording
             </Button>
           )}
           {busy && (
             <span className="voice-status" role="status">
+              <Spin size="small" />{' '}
               {phase === 'uploading'
                 ? 'Uploading to Sonix…'
                 : 'Transcribing… this can take a minute or two.'}
             </span>
           )}
         </div>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
+        {error && <Alert type="error" showIcon role="alert" title={error} />}
         {phase === 'done' && (
           <div className="voice-result">
             <label htmlFor="voice-transcript">Transcript</label>
-            <textarea
+            <Input.TextArea
               id="voice-transcript"
               rows={8}
               value={transcript}
@@ -123,7 +131,10 @@ export default function VoiceAgentPage() {
               disabled={!transcript.trim()}
               onClick={() =>
                 create({
-                  summary: transcript.trim().split(/[.!?\n]/)[0].slice(0, 120),
+                  summary: transcript
+                    .trim()
+                    .split(/[.!?\n]/)[0]
+                    .slice(0, 120),
                   description: transcript.trim(),
                 })
               }
@@ -132,7 +143,7 @@ export default function VoiceAgentPage() {
             </Button>
           </div>
         )}
-      </section>
+      </Card>
     </>
   );
 }

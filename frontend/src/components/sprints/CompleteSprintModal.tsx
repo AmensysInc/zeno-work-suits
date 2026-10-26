@@ -4,6 +4,7 @@ import type { Issue, Sprint } from '../../types';
 import { Modal } from '../ui/dialog';
 import { Field } from '../ui/shared';
 import { Button } from '../ui/button';
+import { Select } from '../ui/form';
 
 /** Completes a sprint, sending unfinished work to the backlog or a planned sprint. */
 export default function CompleteSprintModal({
@@ -50,21 +51,21 @@ export default function CompleteSprintModal({
         </p>
         {open > 0 && (
           <Field label="Move unfinished work to">
-            <select value={target} onChange={(e) => setTarget(e.target.value)}>
-              <option value="">Backlog</option>
-              {planned.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={target}
+              onChange={setTarget}
+              options={[
+                { value: '', label: 'Backlog' },
+                ...planned.map((s) => ({ value: s.id, label: s.name })),
+              ]}
+            />
           </Field>
         )}
         <div className="actions form-footer">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={complete.isPending}>
+          <Button type="submit" loading={complete.isPending}>
             Complete sprint
           </Button>
         </div>

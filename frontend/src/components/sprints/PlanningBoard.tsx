@@ -16,8 +16,17 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Link } from 'react-router-dom';
+import { Avatar, Card, Checkbox, Tag, Tooltip, Typography } from 'antd';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  HolderOutlined,
+} from '@ant-design/icons';
 import { label, type Issue, type Sprint } from '../../types';
 import { Badge } from '../ui/shared';
+import { Button } from '../ui/button';
+import { Select } from '../ui/form';
+import { confirm } from '../ui/confirm';
 import { useMoveIssue } from '../../hooks/useMoveIssue';
 import { useSave } from '../../hooks/data';
 import { useCreateIssue } from '../layout/AppShell';
@@ -54,8 +63,7 @@ function Item({
     >
       <div className="actions">
         {selection && (
-          <input
-            type="checkbox"
+          <Checkbox
             aria-label={`Select ${issue.issue_key}`}
             checked={selection.ids.has(issue.id)}
             onChange={() => selection.toggle(issue.id)}
@@ -67,7 +75,7 @@ function Item({
           {...listeners}
           aria-label={`Drag ${issue.issue_key}`}
         >
-          ⠿
+          <HolderOutlined />
         </button>
       </div>
       <div>
@@ -80,62 +88,70 @@ function Item({
           {!['BACKLOG', 'TODO'].includes(issue.status) && (
             <Badge value={issue.status} />
           )}
-          <span className={issue.priority === 'CRITICAL' ? 'error' : 'muted'}>
+          <Typography.Text
+            type={issue.priority === 'CRITICAL' ? 'danger' : 'secondary'}
+          >
             {label(issue.priority)}
-          </span>
-          <span className="muted">{issue.story_points} pts</span>
-          {epic && <span className="chip chip-epic">{epic.summary}</span>}
-          <span
-            className="mini-avatar"
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {issue.story_points} pts
+          </Typography.Text>
+          {epic && (
+            <Tag color="purple" variant="filled" className="chip-epic">
+              {epic.summary}
+            </Tag>
+          )}
+          <Tooltip
             title={
               issue.assignee
                 ? `${issue.assignee.first_name} ${issue.assignee.last_name}`
                 : 'Unassigned'
             }
           >
-            {issue.assignee
-              ? issue.assignee.first_name[0] + issue.assignee.last_name[0]
-              : '—'}
-          </span>
+            <Avatar size={24} className="mini-avatar">
+              {issue.assignee
+                ? issue.assignee.first_name[0] + issue.assignee.last_name[0]
+                : '—'}
+            </Avatar>
+          </Tooltip>
         </div>
       </div>
       <div className="actions">
-        <select
+        <Select
+          size="small"
           aria-label={`Sprint for ${issue.issue_key}`}
           disabled={disabled}
           value={issue.sprint_id ?? ''}
-          onChange={(e) =>
-            move(issue.id, e.target.value ? Number(e.target.value) : null)
-          }
-        >
-          <option value="">Backlog</option>
-          {sprints
-            .filter((s) => s.status !== 'COMPLETED')
-            .map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-        </select>
-        <button
-          className="icon-button"
+          onChange={(v) => move(issue.id, v ? Number(v) : null)}
+          options={[
+            { value: '', label: 'Backlog' },
+            ...sprints
+              .filter((s) => s.status !== 'COMPLETED')
+              .map((s) => ({ value: s.id, label: s.name })),
+          ]}
+        />
+        <Button
+          variant="ghost"
+          size="small"
+          icon={<EditOutlined />}
           aria-label={`Edit ${issue.issue_key}`}
           title="Edit"
           onClick={() => edit(issue)}
-        >
-          ✎
-        </button>
-        <button
-          className="icon-button"
+        />
+        <Button
+          variant="ghost"
+          size="small"
+          icon={<DeleteOutlined />}
           aria-label={`Delete ${issue.issue_key}`}
           title="Delete"
           disabled={del.isPending}
-          onClick={() => {
-            if (window.confirm(`Delete ${issue.issue_key}?`)) del.mutate({});
+          onClick={async () => {
+            if (
+              await confirm(`Delete ${issue.issue_key}?`, { okText: 'Delete' })
+            )
+              del.mutate({});
           }}
-        >
-          🗑
-        </button>
+        />
       </div>
     </div>
   );
@@ -164,36 +180,37 @@ function Zone({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled });
   return (
-    <section
-      ref={setNodeRef}
-      className={`card planning-zone ${isOver ? 'drop-over' : ''}`}
-    >
-      <div className="section-head">
-        <h3>{title}</h3>
-        <span className="muted">
-          {items.length} issues ·{' '}
-          {items.reduce((n, i) => n + i.story_points, 0)} pts
-        </span>
-      </div>
-      {head}
-      <SortableContext
-        items={items.map((i) => i.id)}
-        strategy={verticalListSortingStrategy}
+    <div ref={setNodeRef}>
+      <Card
+        className={`card planning-zone ${isOver ? 'drop-over' : ''}`}
+        title={title}
+        extra={
+          <Typography.Text type="secondary">
+            {items.length} issues ·{' '}
+            {items.reduce((n, i) => n + i.story_points, 0)} pts
+          </Typography.Text>
+        }
       >
-        {items.map((i) => (
-          <Item
-            key={i.id}
-            issue={i}
-            sprints={sprints}
-            epic={epics.find((e) => e.id === i.epic_id)}
-            move={move}
-            disabled={disabled}
-            selection={selection}
-          />
-        ))}
-      </SortableContext>
-      {!items.length && <div className="empty">Drop issues here</div>}
-    </section>
+        {head}
+        <SortableContext
+          items={items.map((i) => i.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {items.map((i) => (
+            <Item
+              key={i.id}
+              issue={i}
+              sprints={sprints}
+              epic={epics.find((e) => e.id === i.epic_id)}
+              move={move}
+              disabled={disabled}
+              selection={selection}
+            />
+          ))}
+        </SortableContext>
+        {!items.length && <div className="empty">Drop issues here</div>}
+      </Card>
+    </div>
   );
 }
 

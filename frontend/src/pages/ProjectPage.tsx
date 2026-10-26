@@ -1,9 +1,11 @@
 import { Link, useParams } from 'react-router-dom';
+import { Card } from 'antd';
+import { GithubOutlined, PlusOutlined } from '@ant-design/icons';
 import { useData, useIssues } from '../hooks/data';
 import { projectDates, statuses, type Project, type Sprint } from '../types';
 import { percent } from '../lib/qa';
 import { PageHeader, State } from '../components/ui/shared';
-import { Button } from '../components/ui/button';
+import { Button, LinkButton } from '../components/ui/button';
 import { Kpi, Progress } from '../components/ui/charts';
 import { useCreateIssue } from '../components/layout/AppShell';
 import IssueTable from '../components/issues/IssueTable';
@@ -33,11 +35,14 @@ export default function ProjectPage() {
         title="Overview"
         description={p.description || 'No description yet.'}
       >
-        <Button asChild variant="outline">
-          <Link to={`/projects/${p.id}/backlog`}>Open backlog</Link>
-        </Button>
-        <Button onClick={() => create({ project_id: p.id })}>
-          + Create issue
+        <LinkButton variant="outline" to={`/projects/${p.id}/backlog`}>
+          Open backlog
+        </LinkButton>
+        <Button
+          icon={<PlusOutlined />}
+          onClick={() => create({ project_id: p.id })}
+        >
+          Create issue
         </Button>
       </PageHeader>
       {(projectDates.some(([name]) => p[name]) || p.github_repo) && (
@@ -52,7 +57,7 @@ export default function ProjectPage() {
           )}
           {p.github_repo && (
             <a href={p.github_repo} target="_blank" rel="noreferrer">
-              GitHub repository ↗
+              <GithubOutlined /> GitHub repository ↗
             </a>
           )}
         </p>
@@ -88,19 +93,25 @@ export default function ProjectPage() {
         />
       </div>
       <div className="chart-grid-2">
-        <section className="card">
-          <div className="section-head">
-            <h2>
-              {kanban
-                ? 'Kanban flow'
-                : active
-                  ? `Active sprint · ${active.name}`
-                  : 'No active sprint'}
-            </h2>
-            <Button asChild variant="outline">
-              <Link to={`/projects/${p.id}/board`}>Open board</Link>
-            </Button>
-          </div>
+        <Card
+          className="card"
+          title={
+            kanban
+              ? 'Kanban flow'
+              : active
+                ? `Active sprint · ${active.name}`
+                : 'No active sprint'
+          }
+          extra={
+            <LinkButton
+              variant="outline"
+              size="small"
+              to={`/projects/${p.id}/board`}
+            >
+              Open board
+            </LinkButton>
+          }
+        >
           {kanban || active ? (
             <>
               {active && !kanban && (
@@ -130,12 +141,12 @@ export default function ProjectPage() {
                 : 'Create a sprint in the backlog to start planning.'}
             </p>
           )}
-        </section>
-        <section className="card">
-          <div className="section-head">
-            <h2>Epics</h2>
-            <Link to={`/projects/${p.id}/epics`}>View all →</Link>
-          </div>
+        </Card>
+        <Card
+          className="card"
+          title="Epics"
+          extra={<Link to={`/projects/${p.id}/epics`}>View all →</Link>}
+        >
           {!epics.length && <p className="muted">No epics yet.</p>}
           {epics.slice(0, 5).map((e) => {
             const items = all.filter((i) => i.epic_id === e.id);
@@ -153,20 +164,22 @@ export default function ProjectPage() {
               </div>
             );
           })}
-        </section>
+        </Card>
       </div>
       <div className="dashboard-detail">
-        <section className="card">
-          <div className="section-head">
-            <h2>Recently updated</h2>
+        <Card
+          className="card"
+          title="Recently updated"
+          extra={
             <Link to={`/projects/${p.id}/work-items`}>All work items →</Link>
-          </div>
+          }
+        >
           <IssueTable
             issues={[...all]
               .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
               .slice(0, 8)}
           />
-        </section>
+        </Card>
         <IssueCharts issues={work} />
       </div>
     </>

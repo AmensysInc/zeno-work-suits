@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Alert, Checkbox, Input, Typography } from 'antd';
+import { CheckOutlined } from '@ant-design/icons';
 import { useData, useMe, useSave } from '../../hooks/data';
 import {
-  label,
   runStatuses,
   stepStatuses,
   type Execution,
@@ -15,6 +16,7 @@ import { bugFromRun, fullName } from '../../lib/qa';
 import { Modal } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Field } from '../ui/shared';
+import { DateInput, Select, labelled } from '../ui/form';
 import { useCreateIssue } from '../layout/AppShell';
 
 type StepResult = {
@@ -123,13 +125,18 @@ export default function RunTestModal({
         }}
       >
         {tc.preconditions && (
-          <p className="linked-context">Preconditions: {tc.preconditions}</p>
+          <Alert
+            className="linked-context"
+            type="info"
+            title={`Preconditions: ${tc.preconditions}`}
+          />
         )}
         <div className="section-head">
-          <h3>Step results</h3>
+          <Typography.Title level={5}>Step results</Typography.Title>
           {!!steps.length && (
             <Button
               variant="ghost"
+              icon={<CheckOutlined />}
               onClick={() =>
                 apply(steps.map((s) => ({ ...s, status: 'PASSED' })))
               }
@@ -158,20 +165,13 @@ export default function RunTestModal({
                 <p className="muted">Expected: {s.expected_result || '—'}</p>
               </div>
               <div className="run-inputs">
-                <select
+                <Select
                   aria-label={`Step ${s.step_number} result`}
                   value={steps[index].status}
-                  onChange={(e) =>
-                    update(index, { status: e.target.value as StepStatus })
-                  }
-                >
-                  {stepStatuses.map((v) => (
-                    <option key={v} value={v}>
-                      {label(v)}
-                    </option>
-                  ))}
-                </select>
-                <input
+                  onChange={(v) => update(index, { status: v as StepStatus })}
+                  options={labelled(stepStatuses)}
+                />
+                <Input
                   aria-label={`Step ${s.step_number} actual result`}
                   placeholder="Actual result"
                   value={steps[index].actual_result}
@@ -185,37 +185,29 @@ export default function RunTestModal({
         </div>
         <div className="form-grid">
           <Field label="Overall result">
-            <select
+            <Select
               required
+              placeholder="Select a result"
               value={status}
-              onChange={(e) => {
-                setStatus(e.target.value as RunStatus);
+              onChange={(v) => {
+                setStatus(v as RunStatus);
                 setChosen(true);
               }}
-            >
-              <option value="">Select a result</option>
-              {runStatuses.map((v) => (
-                <option key={v} value={v}>
-                  {label(v)}
-                </option>
-              ))}
-            </select>
+              options={labelled(runStatuses)}
+            />
           </Field>
           <Field label="Tester">
-            <select
+            <Select
               value={tester ?? me.data?.id ?? ''}
-              onChange={(e) => setTester(Number(e.target.value))}
-            >
-              {members.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {fullName(u)}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setTester(Number(v))}
+              options={members.map((u) => ({
+                value: u.id,
+                label: fullName(u),
+              }))}
+            />
           </Field>
           <Field label="Execution date">
-            <input
-              type="date"
+            <DateInput
               name="executed_on"
               required
               defaultValue={
@@ -224,24 +216,21 @@ export default function RunTestModal({
             />
           </Field>
           <Field label="Sprint">
-            <select
+            <Select
               value={sprint}
-              onChange={(e) =>
-                setSprintId(e.target.value ? Number(e.target.value) : '')
-              }
-            >
-              <option value="">No sprint</option>
-              {openSprints.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.status === 'ACTIVE' ? ' (active)' : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setSprintId(v ? Number(v) : '')}
+              options={[
+                { value: '', label: 'No sprint' },
+                ...openSprints.map((s) => ({
+                  value: s.id,
+                  label: `${s.name}${s.status === 'ACTIVE' ? ' (active)' : ''}`,
+                })),
+              ]}
+            />
           </Field>
         </div>
         <Field label="Environment">
-          <input
+          <Input
             name="environment"
             maxLength={100}
             placeholder="e.g. Staging, Chrome 130"
@@ -249,7 +238,7 @@ export default function RunTestModal({
           />
         </Field>
         <Field label="Actual result">
-          <textarea
+          <Input.TextArea
             name="actual_result"
             rows={3}
             placeholder="What happened when you ran the test?"
@@ -257,21 +246,20 @@ export default function RunTestModal({
           />
         </Field>
         {!execution && status === 'FAILED' && (
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={logBug}
-              onChange={(e) => setLogBug(e.target.checked)}
-            />
+          <Checkbox
+            className="check-row"
+            checked={logBug}
+            onChange={(e) => setLogBug(e.target.checked)}
+          >
             Log a bug for this failure after saving
-          </label>
+          </Checkbox>
         )}
         <div className="actions form-footer">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={save.isPending || !status}>
-            {save.isPending ? 'Saving…' : 'Save test run'}
+          <Button type="submit" loading={save.isPending} disabled={!status}>
+            Save test run
           </Button>
         </div>
       </form>

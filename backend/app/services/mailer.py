@@ -16,14 +16,14 @@ def send_login_details(user, temp_password: str, reset: bool = False) -> bool:
     if not email_configured():
         return False
     subject = (
-        "Your Zeno Work Suite password was reset"
+        "Your Zeno TeamSuite password was reset"
         if reset
-        else "Your Zeno Work Suite account is ready"
+        else "Your Zeno TeamSuite account is ready"
     )
     intro = (
         "An administrator reset your password."
         if reset
-        else "An administrator created a Zeno Work Suite account for you."
+        else "An administrator created a Zeno TeamSuite account for you."
     )
     name = html.escape(user.first_name)
     body = (

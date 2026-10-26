@@ -63,6 +63,14 @@ class PullOut(BaseModel):
     updated_at: str
 
 
+class CommitOut(BaseModel):
+    sha: str
+    message: str
+    author: str
+    date: str
+    html_url: str
+
+
 class PullIn(BaseModel):
     title: str = Field(min_length=1, max_length=256)
     head: str = Field(min_length=1, max_length=200, pattern=BRANCH)

@@ -1,7 +1,28 @@
 import { useState } from 'react';
+import {
+  Alert,
+  Avatar,
+  Card,
+  Empty,
+  Input,
+  Menu,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+} from 'antd';
+import {
+  BranchesOutlined,
+  DisconnectOutlined,
+  GithubOutlined,
+  LinkOutlined,
+  PullRequestOutlined,
+} from '@ant-design/icons';
 import { useData, useMe, useProjects, useSave } from '../hooks/data';
 import { Badge, PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
+import { Select } from '../components/ui/form';
+import { confirm } from '../components/ui/confirm';
 import LinkRepoModal from '../components/github/LinkRepoModal';
 import NewPullModal from '../components/github/NewPullModal';
 import {
@@ -34,7 +55,7 @@ function Branches({
     'Branch created',
   );
   return (
-    <section className="card">
+    <Card className="card">
       <form
         className="inline-form github-form"
         onSubmit={async (e) => {
@@ -52,7 +73,7 @@ function Branches({
           }
         }}
       >
-        <input
+        <Input
           name="name"
           required
           maxLength={200}
@@ -61,65 +82,75 @@ function Branches({
           aria-label="New branch name"
           placeholder="New branch, e.g. feature/leave-form"
         />
-        <select
+        <Select
           name="from_branch"
+          className="inline-select"
           aria-label="Create from"
           defaultValue={repo.default_branch}
+          options={repo.branches.map((b) => ({
+            value: b.name,
+            label: `from ${b.name}`,
+          }))}
+        />
+        <Button
+          type="submit"
+          icon={<BranchesOutlined />}
+          loading={create.isPending}
         >
-          {repo.branches.map((b) => (
-            <option key={b.name} value={b.name}>
-              from {b.name}
-            </option>
-          ))}
-        </select>
-        <Button type="submit" disabled={create.isPending}>
           Create branch
         </Button>
       </form>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Branch</th>
-              <th>Latest commit</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {repo.branches.map((b) => (
-              <tr key={b.name}>
-                <td>
-                  <a
-                    href={`${repo.html_url}/tree/${b.name}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <strong>{b.name}</strong>
-                  </a>{' '}
-                  {b.name === repo.default_branch && (
-                    <span className="badge badge-active">Default</span>
-                  )}{' '}
-                  {b.protected && <span className="badge">Protected</span>}
-                </td>
-                <td>
-                  <code>{b.sha.slice(0, 7)}</code>
-                </td>
-                <td className="row-actions">
-                  {b.name !== repo.default_branch && (
-                    <Button variant="ghost" onClick={() => onOpenPull(b.name)}>
-                      Open pull request
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {!repo.branches.length && (
-        <p className="muted">This repository has no branches yet.</p>
-      )}
-    </section>
+      <Table
+        rowKey="name"
+        size="middle"
+        pagination={false}
+        scroll={{ x: 'max-content' }}
+        dataSource={repo.branches}
+        locale={{ emptyText: 'This repository has no branches yet.' }}
+        columns={[
+          {
+            title: 'Branch',
+            dataIndex: 'name',
+            render: (name, b) => (
+              <>
+                <a
+                  href={`${repo.html_url}/tree/${name}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <strong>{name}</strong>
+                </a>{' '}
+                {name === repo.default_branch && (
+                  <Tag color="green">Default</Tag>
+                )}
+                {b.protected && <Tag>Protected</Tag>}
+              </>
+            ),
+          },
+          {
+            title: 'Latest commit',
+            dataIndex: 'sha',
+            render: (sha) => (
+              <Typography.Text code>{sha.slice(0, 7)}</Typography.Text>
+            ),
+          },
+          {
+            key: 'actions',
+            align: 'right',
+            render: (_, b) =>
+              b.name !== repo.default_branch && (
+                <Button
+                  variant="ghost"
+                  icon={<PullRequestOutlined />}
+                  onClick={() => onOpenPull(b.name)}
+                >
+                  Open pull request
+                </Button>
+              ),
+          },
+        ]}
+      />
+    </Card>
   );
 }
 
@@ -136,26 +167,29 @@ function MergeControl({
     'put',
     `Pull request #${pull.number} merged`,
   );
-  if (pull.draft) return <span className="muted">Draft</span>;
+  if (pull.draft)
+    return <Typography.Text type="secondary">Draft</Typography.Text>;
   return (
     <span className="actions">
-      <select
+      <Select
+        size="small"
         aria-label={`Merge method for #${pull.number}`}
         value={method}
-        onChange={(e) => setMethod(e.target.value)}
-      >
-        {mergeMethods.map(([value, title]) => (
-          <option key={value} value={value}>
-            {title}
-          </option>
-        ))}
-      </select>
+        onChange={setMethod}
+        popupMatchSelectWidth={false}
+        options={mergeMethods.map(([value, title]) => ({
+          value,
+          label: title,
+        }))}
+      />
       <Button
+        size="small"
         disabled={merge.isPending}
-        onClick={() => {
+        onClick={async () => {
           if (
-            window.confirm(
+            await confirm(
               `Merge #${pull.number} "${pull.title}" into ${pull.base}?`,
+              { danger: false, okText: 'Merge' },
             )
           )
             merge.mutate({ method });
@@ -181,75 +215,94 @@ function Pulls({
     `/github/projects/${project.id}/pulls?state=${state}`,
   );
   return (
-    <section className="card">
+    <Card className="card">
       <div className="section-head">
-        <select
+        <Select
           aria-label="Pull request state"
+          className="inline-select"
           value={state}
-          onChange={(e) => setState(e.target.value)}
+          onChange={setState}
+          options={[
+            { value: 'open', label: 'Open' },
+            { value: 'closed', label: 'Closed and merged' },
+            { value: 'all', label: 'All' },
+          ]}
+        />
+        <Button
+          icon={<PullRequestOutlined />}
+          onClick={onNew}
+          disabled={repo.branches.length < 2}
         >
-          <option value="open">Open</option>
-          <option value="closed">Closed and merged</option>
-          <option value="all">All</option>
-        </select>
-        <Button onClick={onNew} disabled={repo.branches.length < 2}>
           New pull request
         </Button>
       </div>
       <State loading={pulls.isLoading} error={pulls.error} />
       {pulls.data && !pulls.data.length && (
-        <p className="muted">
-          No {state === 'all' ? '' : state} pull requests.
-        </p>
+        <Empty
+          description={`No ${state === 'all' ? '' : state} pull requests.`}
+        />
       )}
       {!!pulls.data?.length && (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Pull request</th>
-                <th>Branches</th>
-                <th>Author</th>
-                <th>Status</th>
-                <th>Updated</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {pulls.data.map((p) => (
-                <tr key={p.number}>
-                  <td className="wrap">
-                    <a href={p.html_url} target="_blank" rel="noreferrer">
-                      <strong>#{p.number}</strong> {p.title}
-                    </a>
-                  </td>
-                  <td>
-                    <code>{p.head}</code> → <code>{p.base}</code>
-                  </td>
-                  <td>{p.author}</td>
-                  <td>
-                    <Badge
-                      value={p.draft && p.state === 'open' ? 'draft' : p.state}
-                    />
-                  </td>
-                  <td>{new Date(p.updated_at).toLocaleDateString()}</td>
-                  <td className="row-actions">
-                    {p.state === 'open' && repo.can_merge && (
-                      <MergeControl projectId={project.id} pull={p} />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          rowKey="number"
+          size="middle"
+          pagination={false}
+          scroll={{ x: 'max-content' }}
+          dataSource={pulls.data}
+          columns={[
+            {
+              title: 'Pull request',
+              key: 'title',
+              className: 'wrap',
+              render: (_, p) => (
+                <a href={p.html_url} target="_blank" rel="noreferrer">
+                  <strong>#{p.number}</strong> {p.title}
+                </a>
+              ),
+            },
+            {
+              title: 'Branches',
+              key: 'branches',
+              render: (_, p) => (
+                <>
+                  <Typography.Text code>{p.head}</Typography.Text> →{' '}
+                  <Typography.Text code>{p.base}</Typography.Text>
+                </>
+              ),
+            },
+            { title: 'Author', dataIndex: 'author' },
+            {
+              title: 'Status',
+              key: 'status',
+              render: (_, p) => (
+                <Badge
+                  value={p.draft && p.state === 'open' ? 'draft' : p.state}
+                />
+              ),
+            },
+            {
+              title: 'Updated',
+              dataIndex: 'updated_at',
+              render: (v) => new Date(v).toLocaleDateString(),
+            },
+            {
+              key: 'merge',
+              align: 'right',
+              render: (_, p) =>
+                p.state === 'open' &&
+                repo.can_merge && (
+                  <MergeControl projectId={project.id} pull={p} />
+                ),
+            },
+          ]}
+        />
       )}
       {!repo.can_merge && (
         <p className="muted">
           Merging is limited to admins, the managing owner and project leads.
         </p>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -274,7 +327,9 @@ function Repository({
     <>
       <div className="section-head">
         <div>
-          <h2>{repoName(project.github_repo)}</h2>
+          <Typography.Title level={4}>
+            <GithubOutlined /> {repoName(project.github_repo)}
+          </Typography.Title>
           <a
             className="muted"
             href={project.github_repo}
@@ -287,11 +342,13 @@ function Repository({
         {canManage && (
           <Button
             variant="ghost"
+            icon={<DisconnectOutlined />}
             disabled={unlink.isPending}
-            onClick={() => {
+            onClick={async () => {
               if (
-                window.confirm(
+                await confirm(
                   `Unlink ${repoName(project.github_repo)} from ${project.name}? Nothing is changed on GitHub.`,
+                  { okText: 'Unlink' },
                 )
               )
                 unlink.mutate({});
@@ -301,20 +358,17 @@ function Repository({
           </Button>
         )}
       </div>
-      <div className="tabs">
-        <button
-          className={tab === 'branches' ? 'selected' : ''}
-          onClick={() => setTab('branches')}
-        >
-          Branches{repo.data ? ` · ${repo.data.branches.length}` : ''}
-        </button>
-        <button
-          className={tab === 'pulls' ? 'selected' : ''}
-          onClick={() => setTab('pulls')}
-        >
-          Pull requests
-        </button>
-      </div>
+      <Tabs
+        activeKey={tab}
+        onChange={(v) => setTab(v as 'branches' | 'pulls')}
+        items={[
+          {
+            key: 'branches',
+            label: `Branches${repo.data ? ` · ${repo.data.branches.length}` : ''}`,
+          },
+          { key: 'pulls', label: 'Pull requests' },
+        ]}
+      />
       <State loading={repo.isLoading} error={repo.error} />
       {repo.data && tab === 'branches' && (
         <Branches
@@ -366,51 +420,69 @@ export default function GitHubPage() {
         {configured &&
           canCreateProjects(me.data?.role) &&
           manageable.length > 0 && (
-            <Button onClick={() => setLinking(true)}>Link repository</Button>
+            <Button icon={<LinkOutlined />} onClick={() => setLinking(true)}>
+              Link repository
+            </Button>
           )}
       </PageHeader>
       {status.data && !configured && (
-        <section className="card github-setup">
-          <h2>Connect GitHub</h2>
-          <p>
-            Add a GitHub personal access token as <code>GITHUB_TOKEN</code> in{' '}
-            <code>backend/.env</code>, then restart the backend. Give it access
-            to the repositories you want to link, with read and write permission
-            for <strong>Contents</strong> and <strong>Pull requests</strong>.
-          </p>
-        </section>
+        <Alert
+          className="github-setup"
+          type="warning"
+          showIcon
+          title="Connect GitHub"
+          description={
+            <>
+              Add a GitHub personal access token as <code>GITHUB_TOKEN</code> in{' '}
+              <code>backend/.env</code>, then restart the backend. Give it
+              access to the repositories you want to link, with read and write
+              permission for <strong>Contents</strong> and{' '}
+              <strong>Pull requests</strong>.
+            </>
+          }
+        />
       )}
       <State
         loading={projects.isLoading || status.isLoading}
         error={projects.error || status.error}
       />
       {projects.data && !linked.length && (
-        <div className="empty">
-          No linked repositories yet.
-          {configured && manageable.length > 0
-            ? ' Use “Link repository” to connect one to a project.'
-            : ' Ask an admin or a project’s manager to link one.'}
-        </div>
+        <Empty
+          description={`No linked repositories yet.${
+            configured && manageable.length > 0
+              ? ' Use “Link repository” to connect one to a project.'
+              : ' Ask an admin or a project’s manager to link one.'
+          }`}
+        />
       )}
       {current && (
         <div className="github-layout">
-          <nav className="card github-repos" aria-label="Linked repositories">
-            <small className="nav-heading">LINKED REPOSITORIES</small>
-            {linked.map((p) => (
-              <button
-                key={p.id}
-                className={p.id === current.id ? 'nav-link active' : 'nav-link'}
-                onClick={() => setSelected(p.id)}
-              >
-                <span className="project-icon">{p.key.slice(0, 2)}</span>
-                <span>
-                  <strong>{p.name}</strong>
-                  <br />
-                  <span className="muted">{repoName(p.github_repo)}</span>
-                </span>
-              </button>
-            ))}
-          </nav>
+          <Card
+            className="card github-repos"
+            title="Linked repositories"
+            size="small"
+          >
+            <Menu
+              aria-label="Linked repositories"
+              mode="inline"
+              selectedKeys={[String(current.id)]}
+              onClick={({ key }) => setSelected(Number(key))}
+              items={linked.map((p) => ({
+                key: String(p.id),
+                icon: (
+                  <Avatar shape="square" size={28} className="project-icon">
+                    {p.key.slice(0, 2)}
+                  </Avatar>
+                ),
+                label: (
+                  <span className="repo-item">
+                    <strong>{p.name}</strong>
+                    <span className="muted">{repoName(p.github_repo)}</span>
+                  </span>
+                ),
+              }))}
+            />
+          </Card>
           <div>
             {configured ? (
               <Repository

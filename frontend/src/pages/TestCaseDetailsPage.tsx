@@ -1,10 +1,17 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Card, Descriptions, Table, Tag, Typography } from 'antd';
+import {
+  CaretRightOutlined,
+  DeleteOutlined,
+  EditOutlined,
+} from '@ant-design/icons';
 import { useData, useSave } from '../hooks/data';
 import type { Criterion, Issue, TestCase } from '../types';
 import { label } from '../types';
 import { PageHeader, State, Badge } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
+import { confirm } from '../components/ui/confirm';
 import TestCaseForm from '../components/testing/TestCaseForm';
 import RunTestModal from '../components/testing/RunTestModal';
 import ExecutionHistory from '../components/testing/ExecutionHistory';
@@ -36,18 +43,29 @@ export default function TestCaseDetailsPage() {
         description={`${tc.test_case_key} · ${label(tc.test_type)} · ${tc.steps.length} steps`}
       >
         {!editing && (
-          <Button onClick={() => setRunning(true)}>▶ Run test</Button>
+          <Button
+            icon={<CaretRightOutlined />}
+            onClick={() => setRunning(true)}
+          >
+            Run test
+          </Button>
         )}
-        <Button variant="outline" onClick={() => setEditing(!editing)}>
+        <Button
+          variant="outline"
+          icon={<EditOutlined />}
+          onClick={() => setEditing(!editing)}
+        >
           {editing ? 'Close editor' : 'Edit'}
         </Button>
         <Button
-          variant="ghost"
+          variant="destructive"
+          icon={<DeleteOutlined />}
           onClick={async () => {
             if (
-              !window.confirm(
+              !(await confirm(
                 'Delete this test case, its steps and its run history?',
-              )
+                { okText: 'Delete' },
+              ))
             )
               return;
             try {
@@ -70,83 +88,99 @@ export default function TestCaseDetailsPage() {
       ) : (
         <>
           <div className="detail-grid">
-            <section className="card">
-              <h2>Test steps</h2>
-              <div className="table-wrap">
-                <table className="steps-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Action</th>
-                      <th>Test data</th>
-                      <th>Expected result</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tc.steps.map((s) => (
-                      <tr key={s.id}>
-                        <td>{s.step_number}</td>
-                        <td>
-                          {s.action}
-                          {s.shared_step_id && (
-                            <span className="chip" title="Reusable step">
-                              Reusable
-                            </span>
-                          )}
-                        </td>
-                        <td className="prewrap muted">{s.test_data || '—'}</td>
-                        <td className="prewrap">{s.expected_result}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <h2 className="spaced">Preconditions</h2>
+            <Card className="card" title="Test steps">
+              <Table
+                className="steps-table"
+                rowKey="id"
+                size="middle"
+                pagination={false}
+                dataSource={tc.steps}
+                columns={[
+                  { title: '#', dataIndex: 'step_number', width: 48 },
+                  {
+                    title: 'Action',
+                    dataIndex: 'action',
+                    render: (action, s) => (
+                      <>
+                        {action}{' '}
+                        {s.shared_step_id && (
+                          <Tag color="blue" title="Reusable step">
+                            Reusable
+                          </Tag>
+                        )}
+                      </>
+                    ),
+                  },
+                  {
+                    title: 'Test data',
+                    dataIndex: 'test_data',
+                    className: 'prewrap muted',
+                    render: (v) => v || '—',
+                  },
+                  {
+                    title: 'Expected result',
+                    dataIndex: 'expected_result',
+                    className: 'prewrap',
+                  },
+                ]}
+              />
+              <Typography.Title level={5} className="spaced">
+                Preconditions
+              </Typography.Title>
               <p className="prewrap">{tc.preconditions || 'None specified'}</p>
-              <h2 className="spaced">Expected result</h2>
+              <Typography.Title level={5} className="spaced">
+                Expected result
+              </Typography.Title>
               <p className="prewrap">
                 {tc.expected_result || 'None specified'}
               </p>
-              <h2 className="spaced">Test data</h2>
+              <Typography.Title level={5} className="spaced">
+                Test data
+              </Typography.Title>
               <p className="prewrap">{tc.test_data || 'None specified'}</p>
-            </section>
-            <aside className="card details-panel">
-              <h2>Details</h2>
-              <dl>
-                <dt>Latest result</dt>
-                <dd>
-                  <Badge value={tc.status} />
-                </dd>
-                <dt>Last run</dt>
-                <dd>{tc.last_executed_on ?? 'Never'}</dd>
-                <dt>Runs</dt>
-                <dd>{tc.execution_count}</dd>
-                <dt>Priority</dt>
-                <dd>
-                  <Badge value={tc.priority} />
-                </dd>
-                <dt>User story</dt>
-                <dd>
-                  <Link to={`/issues/${tc.issue_id}`}>
-                    {story.data
-                      ? `${story.data.issue_key} ${story.data.summary}`
-                      : 'View story'}
-                  </Link>
-                </dd>
-                {tc.ai_source?.source_commit && (
-                  <>
-                    <dt>Generated from</dt>
-                    <dd>
-                      {tc.ai_source.repository}
-                      {tc.ai_source.module_path
-                        ? ` / ${tc.ai_source.module_path}`
-                        : ''}{' '}
-                      @{tc.ai_source.source_commit.slice(0, 7)}
-                    </dd>
-                  </>
-                )}
-              </dl>
-              <h3 className="spaced">Covers acceptance criteria</h3>
+            </Card>
+            <Card className="card details-panel" title="Details">
+              <Descriptions
+                column={1}
+                size="small"
+                className="details-list"
+                items={[
+                  {
+                    label: 'Latest result',
+                    children: <Badge value={tc.status} />,
+                  },
+                  {
+                    label: 'Last run',
+                    children: tc.last_executed_on ?? 'Never',
+                  },
+                  { label: 'Runs', children: tc.execution_count },
+                  {
+                    label: 'Priority',
+                    children: <Badge value={tc.priority} />,
+                  },
+                  {
+                    label: 'User story',
+                    children: (
+                      <Link to={`/issues/${tc.issue_id}`}>
+                        {story.data
+                          ? `${story.data.issue_key} ${story.data.summary}`
+                          : 'View story'}
+                      </Link>
+                    ),
+                  },
+                  ...(tc.ai_source?.source_commit
+                    ? [
+                        {
+                          label: 'Generated from',
+                          children: `${tc.ai_source.repository}${tc.ai_source.module_path ? ` / ${tc.ai_source.module_path}` : ''} @${tc.ai_source.source_commit.slice(0, 7)}`,
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+              <Typography.Title level={5} className="spaced">
+                Covers acceptance criteria
+              </Typography.Title>
               {covered?.length ? (
                 <ul className="covered">
                   {covered.map((c) => (
@@ -158,7 +192,7 @@ export default function TestCaseDetailsPage() {
                   Not linked to any criterion. Edit the test to add coverage.
                 </p>
               )}
-            </aside>
+            </Card>
           </div>
           <ExecutionHistory testCase={tc} />
         </>

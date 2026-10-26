@@ -228,3 +228,70 @@ def test_github_permissions(client, auth, gh):
     # A bad token is reported as a GitHub problem, not as the user's session expiring.
     gh.on("GET", "/repos/acme/hr-portal", 401, {"message": "Bad credentials"})
     assert client.get(f"{base}/branches", headers=auth).status_code == 502
+
+
+def test_commits(client, auth, gh):
+    p = client.post(
+        "/api/projects", headers=auth, json={"key": "HR", "name": "HR"}
+    ).json()
+    assert (
+        client.get(f"/api/github/projects/{p['id']}/commits", headers=auth).status_code
+        == 409
+    )
+    gh.on("GET", "/repos/acme/hr-portal", body=REPO)
+    client.put(
+        f"/api/github/projects/{p['id']}/repository",
+        headers=auth,
+        json={"full_name": "acme/hr-portal"},
+    )
+    gh.on(
+        "GET",
+        "/repos/acme/hr-portal/commits",
+        body=[
+            {
+                "sha": "abc1234def",
+                "html_url": "https://github.com/acme/hr-portal/commit/abc1234def",
+                "author": {"login": "nina"},
+                "commit": {
+                    "message": "Add leave form\n\nLonger description",
+                    "author": {"name": "Nina Kim", "date": "2026-10-20T09:00:00Z"},
+                },
+            },
+            {
+                "sha": "fff0000aaa",
+                "html_url": "https://github.com/acme/hr-portal/commit/fff0000aaa",
+                "author": None,
+                "commit": {
+                    "message": "Initial commit",
+                    "author": {"name": "Sam Patel", "date": "2026-10-19T09:00:00Z"},
+                },
+            },
+        ],
+    )
+    r = client.get(
+        f"/api/github/projects/{p['id']}/commits?branch=feature/leave", headers=auth
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == [
+        {
+            "sha": "abc1234def",
+            "message": "Add leave form",
+            "author": "nina",
+            "date": "2026-10-20T09:00:00Z",
+            "html_url": "https://github.com/acme/hr-portal/commit/abc1234def",
+        },
+        {
+            "sha": "fff0000aaa",
+            "message": "Initial commit",
+            "author": "Sam Patel",
+            "date": "2026-10-19T09:00:00Z",
+            "html_url": "https://github.com/acme/hr-portal/commit/fff0000aaa",
+        },
+    ]
+    assert gh.calls[-1][3] == {"per_page": 50, "sha": "feature/leave"}
+    assert (
+        client.get(
+            f"/api/github/projects/{p['id']}/commits?branch=../x;rm", headers=auth
+        ).status_code
+        == 422
+    )

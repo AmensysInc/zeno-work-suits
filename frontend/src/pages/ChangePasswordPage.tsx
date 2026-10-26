@@ -36,7 +36,7 @@ export default function ChangePasswordPage() {
       <div className="auth-card">
         <div className="brand">
           <span className="logo" />
-          Zeno Work Suite
+          Zeno TeamSuite
         </div>
         <h1>{forced ? 'Choose your password' : 'Change password'}</h1>
         <p>

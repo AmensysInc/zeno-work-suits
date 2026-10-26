@@ -21,7 +21,7 @@ from app.api import (
     github,
 )
 
-app = FastAPI(title="Zeno Work Suite API", version="1.0.0")
+app = FastAPI(title="Zeno TeamSuite API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

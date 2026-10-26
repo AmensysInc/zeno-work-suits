@@ -1,3 +1,4 @@
+import { Card, Statistic } from 'antd';
 import { label } from '../../types';
 
 export interface Row {
@@ -10,8 +11,7 @@ export interface Row {
 export function BarChart({ title, rows }: { title: string; rows: Row[] }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
-    <section className="card chart">
-      <h2>{title}</h2>
+    <Card title={title} className="card chart">
       {rows.map(({ key, count, name }) => (
         <div className="chart-row" key={key}>
           <span>{name ?? label(key)}</span>
@@ -24,7 +24,7 @@ export function BarChart({ title, rows }: { title: string; rows: Row[] }) {
           <strong>{count}</strong>
         </div>
       ))}
-    </section>
+    </Card>
   );
 }
 
@@ -73,10 +73,9 @@ export function Kpi({
   tone?: 'good' | 'bad' | 'warn';
 }) {
   return (
-    <section className={`card kpi ${tone ?? ''}`}>
-      <p>{name}</p>
-      <strong>{value}</strong>
+    <Card className={`card kpi ${tone ?? ''}`} size="small">
+      <Statistic title={name} value={value} />
       {hint && <small>{hint}</small>}
-    </section>
+    </Card>
   );
 }

@@ -1,7 +1,8 @@
-# Production stack for zenoworksuite.com.
+# Production stack for zenoteamsuite.com.
 #   cp .env.production.example .env   (fill in the secrets)
 #   docker compose -f docker-compose.prod.yml up -d --build
 # Only the web container is published, and only on localhost; the host nginx proxies the domain to it.
+# Kept from the old domain: renaming the project would start on a new, empty database volume.
 name: zenoworksuite
 
 services:
@@ -29,7 +30,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-zenoworksuite}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-zenoworksuite}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
-      CORS_ORIGINS: ${CORS_ORIGINS:-["https://zenoworksuite.com","https://www.zenoworksuite.com"]}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["https://zenoteamsuite.com","https://www.zenoteamsuite.com"]}
       SONIX_API_KEY: ${SONIX_API_KEY:-}
       APP_URL: ${APP_URL:-https://zenoworksuite.com}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}

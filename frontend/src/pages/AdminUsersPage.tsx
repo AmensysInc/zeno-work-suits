@@ -234,7 +234,7 @@ export default function AdminUsersPage() {
 function Credentials({ issued }: { issued: IssuedLogin }) {
   const url = `${window.location.origin}/login`;
   const text =
-    `Your Zeno Work Suite account\n` +
+    `Your Zeno TeamSuite account\n` +
     `Sign in: ${url}\n` +
     `Email: ${issued.user.email}\n` +
     `Temporary password: ${issued.temporary_password}\n` +

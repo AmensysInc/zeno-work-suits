@@ -11,10 +11,13 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { Avatar, Tooltip, Typography } from 'antd';
+import { HolderOutlined } from '@ant-design/icons';
 import { toast } from 'sonner';
 import { api, errorMessage } from '../../services/api';
 import { type Issue, statuses, label } from '../../types';
 import { Badge } from '../ui/shared';
+import { Select, labelled } from '../ui/form';
 function Card({
   issue,
   pending,
@@ -46,7 +49,7 @@ function Card({
           {...listeners}
           aria-label={`Drag ${issue.issue_key}`}
         >
-          ⠿
+          <HolderOutlined />
         </button>
       </div>
       <Link className="card-summary" to={`/issues/${issue.id}`}>
@@ -54,38 +57,37 @@ function Card({
       </Link>
       <div className="card-meta">
         <Badge value={issue.issue_type} />
-        <span className={issue.priority === 'CRITICAL' ? 'error' : 'muted'}>
+        <Typography.Text
+          type={issue.priority === 'CRITICAL' ? 'danger' : 'secondary'}
+        >
           {label(issue.priority)}
-        </span>
+        </Typography.Text>
       </div>
       <div className="card-meta">
         <span className="points">{issue.story_points} pts</span>
-        <span
-          className="mini-avatar"
+        <Tooltip
           title={
             issue.assignee
               ? `${issue.assignee.first_name} ${issue.assignee.last_name}`
               : 'Unassigned'
           }
         >
-          {issue.assignee
-            ? issue.assignee.first_name[0] + issue.assignee.last_name[0]
-            : '—'}
-        </span>
+          <Avatar size={24} className="mini-avatar">
+            {issue.assignee
+              ? issue.assignee.first_name[0] + issue.assignee.last_name[0]
+              : '—'}
+          </Avatar>
+        </Tooltip>
       </div>
-      <select
+      <Select
         className="card-status"
+        size="small"
         aria-label={`Status for ${issue.issue_key}`}
         value={issue.status}
         disabled={pending}
-        onChange={(e) => onStatus(issue.id, e.target.value as Issue['status'])}
-      >
-        {statuses.slice(1).map((s) => (
-          <option key={s} value={s}>
-            {label(s)}
-          </option>
-        ))}
-      </select>
+        onChange={(v) => onStatus(issue.id, v as Issue['status'])}
+        options={labelled(statuses.slice(1))}
+      />
     </article>
   );
 }

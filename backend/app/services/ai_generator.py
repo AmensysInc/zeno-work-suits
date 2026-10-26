@@ -19,9 +19,22 @@ from app.schemas.test_case import TestCaseIn, StepIn
 from app.services import github, issues, criteria, test_cases
 from app.services.access import project_access
 
-SOURCE_EXTENSIONS = (".py", ".ts", ".tsx", ".js", ".jsx")
+SOURCE_EXTENSIONS = (
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".java",
+    ".kt",
+    ".cs",
+    ".go",
+    ".rb",
+    ".php",
+)
 MAX_FILES = 10
 MAX_CHARS_PER_FILE = 2500
+MAX_PULL_FILE_PAGES = 3
 
 
 def _repo(db, actor, project_id):
@@ -32,9 +45,10 @@ def _repo(db, actor, project_id):
     return project, name
 
 
-def _repo_info(name):
-    repo = github.call("GET", f"/repos/{name}")
-    branch = repo.get("default_branch") or "main"
+def _repo_info(name, branch=""):
+    if not branch:
+        repo = github.call("GET", f"/repos/{name}")
+        branch = repo.get("default_branch") or "main"
     ref = github.call("GET", f"/repos/{name}/git/ref/heads/{quote(branch)}")
     return branch, ref["object"]["sha"]
 
@@ -46,24 +60,72 @@ def _tree(name, branch):
     return tree.get("tree", [])
 
 
-def modules(db, actor, project_id):
-    _, name = _repo(db, actor, project_id)
-    branch, _ = _repo_info(name)
+def _module_counts(paths):
+    """Source files per module: the repository root, top folders and their subfolders."""
     counts: dict[str, int] = {"": 0}
-    for item in _tree(name, branch):
-        path = item.get("path", "")
-        if item.get("type") != "blob" or not path.endswith(SOURCE_EXTENSIONS):
+    for path in paths:
+        if not path.endswith(SOURCE_EXTENSIONS):
             continue
         counts[""] += 1
         parts = path.split("/")
         if len(parts) > 1:
             counts[parts[0]] = counts.get(parts[0], 0) + 1
             counts["/".join(parts[:2])] = counts.get("/".join(parts[:2]), 0) + 1
+    return counts
+
+
+def modules(db, actor, project_id):
+    _, name = _repo(db, actor, project_id)
+    branch, _ = _repo_info(name)
+    counts = _module_counts(
+        item.get("path", "") for item in _tree(name, branch) if item.get("type") == "blob"
+    )
     return [
         {"path": path, "file_count": count}
         for path, count in sorted(counts.items(), key=lambda item: (item[0] != "", item[0]))
         if count
     ]
+
+
+def _folders(path):
+    """Every folder above a file, outermost first."""
+    parts = path.split("/")[:-1]
+    return ["/".join(parts[: i + 1]) for i in range(len(parts))]
+
+
+def pull_module(db, actor, project_id, number):
+    """The narrowest folder holding most of a pull request's changed source files."""
+    _, name = _repo(db, actor, project_id)
+    changed = []
+    for page in range(1, MAX_PULL_FILE_PAGES + 1):
+        batch = github.call(
+            "GET",
+            f"/repos/{name}/pulls/{number}/files",
+            params={"per_page": 100, "page": page},
+        )
+        changed += [f["filename"] for f in batch if f["filename"].endswith(SOURCE_EXTENSIONS)]
+        if len(batch) < 100:
+            break
+    branch, _ = _repo_info(name)
+    # Only folders on the default branch: that is the code the generator reads.
+    existing = {
+        folder
+        for item in _tree(name, branch)
+        if item.get("type") == "blob" and item.get("path", "").endswith(SOURCE_EXTENSIONS)
+        for folder in _folders(item["path"])
+    }
+    counts: dict[str, int] = {}
+    for path in changed:
+        for folder in _folders(path):
+            if folder in existing:
+                counts[folder] = counts.get(folder, 0) + 1
+    # Most matching files wins; among equals, the deeper (narrower) folder.
+    best = max(counts, key=lambda f: (counts[f], f.count("/")), default="")
+    return {
+        "module_path": best,
+        "changed_files": len(changed),
+        "matched_files": counts.get(best, 0),
+    }
 
 
 def _read_source(name, sha, path):
@@ -410,8 +472,9 @@ def _openai_draft(project, repo, module_path, sha, data, sources):
 
 def generate(db, actor, data):
     project, name = _repo(db, actor, data.project_id)
-    branch, sha = _repo_info(name)
-    sources = _sample_sources(name, branch, sha, data.module_path)
+    _, sha = _repo_info(name, data.branch)
+    # Read the tree by commit so a branch name with slashes is never ambiguous.
+    sources = _sample_sources(name, sha, sha, data.module_path)
     draft = _openai_draft(project, name, data.module_path, sha, data, sources)
     return draft or _fallback(project, name, data.module_path, sha, data, sources)
 

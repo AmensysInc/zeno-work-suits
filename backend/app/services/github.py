@@ -199,6 +199,27 @@ def pulls(db, project_id, state, actor):
     return [_pull(p) for p in items]
 
 
+def _commit(c):
+    commit = c["commit"]
+    author = commit.get("author") or {}
+    return {
+        "sha": c["sha"],
+        "message": commit["message"].split("\n", 1)[0],
+        "author": (c.get("author") or {}).get("login") or author.get("name", ""),
+        "date": author.get("date", ""),
+        "html_url": c["html_url"],
+    }
+
+
+def commits(db, project_id, branch, actor):
+    """The newest commits on a branch, or on the default branch when none is given."""
+    _, name = linked_repo(db, project_id, actor)
+    params = {"per_page": 50}
+    if branch:
+        params["sha"] = branch
+    return [_commit(c) for c in call("GET", f"/repos/{name}/commits", params=params)]
+
+
 def create_pull(db, project_id, data, actor):
     _, name = linked_repo(db, project_id, actor)
     if data.head == data.base:

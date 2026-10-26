@@ -21,15 +21,17 @@ def fake_github(method, path, **kwargs):
             "content": base64.b64encode(LOGIN_SOURCE.encode()).decode(),
         }
     }
+    tree = {
+        "tree": [
+            {"path": "app/users.py", "type": "blob"},
+            {"path": "README.md", "type": "blob"},
+        ]
+    }
     routes = {
         ("GET", repo): {"default_branch": "main", "html_url": "https://github.com/acme/hr-portal"},
         ("GET", f"{repo}/git/ref/heads/main"): {"object": {"sha": "abc123def456"}},
-        ("GET", f"{repo}/git/trees/main"): {
-            "tree": [
-                {"path": "app/users.py", "type": "blob"},
-                {"path": "README.md", "type": "blob"},
-            ]
-        },
+        ("GET", f"{repo}/git/trees/main"): tree,
+        ("GET", f"{repo}/git/trees/abc123def456"): tree,
     }
     if (method, path) in routes:
         return routes[(method, path)]
@@ -136,6 +138,38 @@ def test_generate_review_save_and_trace_commit(client, auth, monkeypatch):
     assert stale.json()["current_commit"] == "fff999aaa111"
 
 
+def test_generate_reads_selected_branch(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    calls = []
+
+    def branch_github(method, path, **kwargs):
+        calls.append(path)
+        repo = "/repos/acme/hr-portal"
+        if path == f"{repo}/git/ref/heads/feature/login":
+            return {"object": {"sha": "bra9c4"}}
+        if path == f"{repo}/git/trees/bra9c4":
+            return {"tree": [{"path": "app/users.py", "type": "blob"}]}
+        return fake_github(method, path, **kwargs)
+
+    monkeypatch.setattr(github, "call", branch_github)
+    draft = client.post(
+        "/api/ai-generator/generate",
+        headers=auth,
+        json={"project_id": project["id"], "branch": "feature/login"},
+    )
+    assert draft.status_code == 200, draft.text
+    assert draft.json()["source_commit"] == "bra9c4"
+    # The branch is named, so the default branch is never looked up.
+    assert "/repos/acme/hr-portal" not in calls
+
+    bad = client.post(
+        "/api/ai-generator/generate",
+        headers=auth,
+        json={"project_id": project["id"], "branch": "../main"},
+    )
+    assert bad.status_code == 422
+
+
 def test_outsider_cannot_generate(client, auth, monkeypatch):
     project = project_with_repo(client, auth, monkeypatch)
     outsider = create_user(client, auth, "Omar", "Kim", "out@example.com")
@@ -145,3 +179,34 @@ def test_outsider_cannot_generate(client, auth, monkeypatch):
         json={"project_id": project["id"]},
     )
     assert denied.status_code == 404
+
+
+def test_pull_module_picks_folder_with_most_changes(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    pulls = {
+        7: [
+            {"filename": "app/users.py"},
+            {"filename": "app/roles.py"},
+            {"filename": "README.md"},
+        ],
+        8: [{"filename": "docs/guide.md"}],
+        9: [{"filename": "billing/invoice.py"}],
+    }
+
+    def with_pulls(method, path, **kwargs):
+        prefix = "/repos/acme/hr-portal/pulls/"
+        if method == "GET" and path.startswith(prefix) and path.endswith("/files"):
+            return pulls[int(path[len(prefix) : -len("/files")])]
+        return fake_github(method, path, **kwargs)
+
+    monkeypatch.setattr(github, "call", with_pulls)
+    base = f"/api/ai-generator/projects/{project['id']}/pulls"
+    r = client.get(f"{base}/7/module", headers=auth)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"module_path": "app", "changed_files": 2, "matched_files": 2}
+    # Only non-source files changed: fall back to the entire repository.
+    r = client.get(f"{base}/8/module", headers=auth)
+    assert r.json() == {"module_path": "", "changed_files": 0, "matched_files": 0}
+    # Changes in a folder the default branch does not have yet.
+    r = client.get(f"{base}/9/module", headers=auth)
+    assert r.json() == {"module_path": "", "changed_files": 1, "matched_files": 0}

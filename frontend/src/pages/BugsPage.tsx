@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Card, Empty, Input, Table, Typography } from 'antd';
+import { BugOutlined } from '@ant-design/icons';
 import { useData, useSave } from '../hooks/data';
 import {
   label,
@@ -13,25 +15,23 @@ import {
 import { fullName, isOpen } from '../lib/qa';
 import { PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
+import { Select, labelled } from '../components/ui/form';
 import { BarChart, Kpi } from '../components/ui/charts';
 import { useCreateIssue } from '../components/layout/AppShell';
 
 function StatusSelect({ bug }: { bug: Issue }) {
   const save = useSave(`/issues/${bug.id}/status`, 'patch', 'Bug updated');
   return (
-    <select
+    <Select
       className="card-status"
+      size="small"
       aria-label={`Status for ${bug.issue_key}`}
       value={bug.status}
       disabled={save.isPending}
-      onChange={(e) => save.mutate({ status: e.target.value })}
-    >
-      {statuses.map((s) => (
-        <option key={s} value={s}>
-          {label(s)}
-        </option>
-      ))}
-    </select>
+      onChange={(v) => save.mutate({ status: v })}
+      options={labelled(statuses)}
+      popupMatchSelectWidth={false}
+    />
   );
 }
 
@@ -76,11 +76,12 @@ export default function BugsPage() {
         description="Defects found in testing, linked to the story and test that exposed them."
       >
         <Button
+          icon={<BugOutlined />}
           onClick={() =>
             create({ project_id: pid, issue_type: 'BUG', priority: 'HIGH' })
           }
         >
-          + Report bug
+          Report bug
         </Button>
       </PageHeader>
       <State loading={issues.isLoading} error={issues.error} />
@@ -107,144 +108,151 @@ export default function BugsPage() {
         />
       </div>
       <div className="dashboard-detail">
-        <section className="card">
+        <Card className="card">
           <div className="filters">
-            <input
-              type="search"
+            <Input.Search
+              allowClear
               aria-label="Search bugs"
               placeholder="Search bugs…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <select
+            <Select
               aria-label="Filter by status"
               value={state}
-              onChange={(e) => setState(e.target.value)}
-            >
-              <option value="OPEN">Open</option>
-              <option value="ALL">All statuses</option>
-              {statuses.map((s) => (
-                <option key={s} value={s}>
-                  {label(s)}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setState}
+              options={[
+                { value: 'OPEN', label: 'Open' },
+                { value: 'ALL', label: 'All statuses' },
+                ...labelled(statuses),
+              ]}
+            />
+            <Select
               aria-label="Filter by priority"
               value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-            >
-              <option value="">All priorities</option>
-              {priorities.map((p) => (
-                <option key={p} value={p}>
-                  {label(p)}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setPriority}
+              options={[
+                { value: '', label: 'All priorities' },
+                ...labelled(priorities),
+              ]}
+            />
+            <Select
               aria-label="Filter by assignee"
               value={assignee}
-              onChange={(e) => setAssignee(e.target.value)}
-            >
-              <option value="">Anyone</option>
-              <option value="none">Unassigned</option>
-              {project.data?.members.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {fullName(u)}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setAssignee}
+              options={[
+                { value: '', label: 'Anyone' },
+                { value: 'none', label: 'Unassigned' },
+                ...(project.data?.members ?? []).map((u) => ({
+                  value: u.id,
+                  label: fullName(u),
+                })),
+              ]}
+            />
+            <Select
               aria-label="Filter by source"
               value={source}
-              onChange={(e) => setSource(e.target.value)}
-            >
-              <option value="">Any source</option>
-              <option value="test">Found by a test</option>
-              <option value="direct">Reported directly</option>
-            </select>
+              onChange={setSource}
+              options={[
+                { value: '', label: 'Any source' },
+                { value: 'test', label: 'Found by a test' },
+                { value: 'direct', label: 'Reported directly' },
+              ]}
+            />
           </div>
           {!issues.isLoading && !shown.length ? (
-            <div className="empty">
-              {bugs.length
-                ? 'No bugs match these filters.'
-                : 'No bugs reported. Failed test runs can log one in a click.'}
-            </div>
+            <Empty
+              description={
+                bugs.length
+                  ? 'No bugs match these filters.'
+                  : 'No bugs reported. Failed test runs can log one in a click.'
+              }
+            />
           ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Key</th>
-                    <th>Summary</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Assignee</th>
-                    <th>Story</th>
-                    <th>Found by</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shown.map((b) => {
+            <Table
+              rowKey="id"
+              size="middle"
+              loading={issues.isLoading}
+              dataSource={shown}
+              scroll={{ x: 'max-content' }}
+              pagination={{ pageSize: 25, hideOnSinglePage: true }}
+              columns={[
+                {
+                  title: 'Key',
+                  dataIndex: 'issue_key',
+                  render: (key, b) => <Link to={`/issues/${b.id}`}>{key}</Link>,
+                },
+                {
+                  title: 'Summary',
+                  dataIndex: 'summary',
+                  render: (summary, b) => (
+                    <Link className="summary-link" to={`/issues/${b.id}`}>
+                      {summary}
+                    </Link>
+                  ),
+                },
+                {
+                  title: 'Priority',
+                  dataIndex: 'priority',
+                  render: (v) => (
+                    <Typography.Text
+                      type={v === 'CRITICAL' ? 'danger' : 'secondary'}
+                    >
+                      {label(v)}
+                    </Typography.Text>
+                  ),
+                },
+                {
+                  title: 'Status',
+                  key: 'status',
+                  render: (_, b) => <StatusSelect bug={b} />,
+                },
+                {
+                  title: 'Assignee',
+                  key: 'assignee',
+                  render: (_, b) => fullName(b.assignee),
+                },
+                {
+                  title: 'Story',
+                  key: 'story',
+                  render: (_, b) => {
                     const story = all.find((i) => i.id === b.related_issue_id);
+                    return story ? (
+                      <Link to={`/issues/${story.id}`} title={story.summary}>
+                        {story.issue_key}
+                      </Link>
+                    ) : (
+                      '—'
+                    );
+                  },
+                },
+                {
+                  title: 'Found by',
+                  key: 'found',
+                  render: (_, b) => {
                     const test = tests.data?.find(
                       (t) => t.id === b.related_test_case_id,
                     );
                     const run = runs.data?.find(
                       (r) => r.id === b.related_execution_id,
                     );
-                    return (
-                      <tr key={b.id}>
-                        <td className="key">
-                          <Link to={`/issues/${b.id}`}>{b.issue_key}</Link>
-                        </td>
-                        <td>
-                          <Link to={`/issues/${b.id}`}>{b.summary}</Link>
-                        </td>
-                        <td
-                          className={
-                            b.priority === 'CRITICAL' ? 'error' : 'muted'
-                          }
-                        >
-                          {label(b.priority)}
-                        </td>
-                        <td>
-                          <StatusSelect bug={b} />
-                        </td>
-                        <td className="muted">{fullName(b.assignee)}</td>
-                        <td className="key">
-                          {story ? (
-                            <Link
-                              to={`/issues/${story.id}`}
-                              title={story.summary}
-                            >
-                              {story.issue_key}
-                            </Link>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td className="muted">
-                          {test ? (
-                            <Link
-                              to={`/test-cases/${test.id}${run ? `#run-${run.id}` : ''}`}
-                              title={test.title}
-                            >
-                              {test.test_case_key}
-                              {run && ` · run ${run.executed_on}`}
-                            </Link>
-                          ) : (
-                            'Reported'
-                          )}
-                        </td>
-                      </tr>
+                    return test ? (
+                      <Link
+                        to={`/test-cases/${test.id}${run ? `#run-${run.id}` : ''}`}
+                        title={test.title}
+                      >
+                        {test.test_case_key}
+                        {run && ` · run ${run.executed_on}`}
+                      </Link>
+                    ) : (
+                      'Reported'
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  },
+                },
+              ]}
+            />
           )}
-        </section>
+        </Card>
         <div className="chart-grid">
           <BarChart
             title="Open bugs by priority"

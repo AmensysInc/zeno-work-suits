@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { Alert, Input, Radio, Tag } from 'antd';
 import { useData, useSave } from '../../hooks/data';
 import { Modal } from '../ui/dialog';
 import { Field } from '../ui/shared';
 import { Button } from '../ui/button';
+import { Select } from '../ui/form';
 import { repoName, type GitHubRepo, type Project } from '../../types';
 
 export default function LinkRepoModal({
@@ -48,23 +50,21 @@ export default function LinkRepoModal({
         }}
       >
         <Field label="Project">
-          <select
-            required
-            value={projectId ?? ''}
-            onChange={(e) => {
-              setProjectId(Number(e.target.value));
+          <Select
+            value={projectId}
+            onChange={(v) => {
+              setProjectId(Number(v));
               setChosen(undefined);
             }}
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} · {p.key}
-                {repoName(p.github_repo)
+            options={projects.map((p) => ({
+              value: p.id,
+              label: `${p.name} · ${p.key}${
+                repoName(p.github_repo)
                   ? ` (linked to ${repoName(p.github_repo)})`
-                  : ''}
-              </option>
-            ))}
-          </select>
+                  : ''
+              }`,
+            }))}
+          />
         </Field>
         {current && (
           <p className="muted">
@@ -74,8 +74,8 @@ export default function LinkRepoModal({
         )}
         <fieldset className="field">
           <span>Available repositories</span>
-          <input
-            type="search"
+          <Input.Search
+            allowClear
             aria-label="Search repositories"
             placeholder="Search repositories…"
             value={search}
@@ -85,9 +85,10 @@ export default function LinkRepoModal({
             <p className="muted">Loading repositories from GitHub…</p>
           )}
           {repos.error && (
-            <p className="error">
-              Unable to load repositories. Check that GitHub is connected.
-            </p>
+            <Alert
+              type="error"
+              title="Unable to load repositories. Check that GitHub is connected."
+            />
           )}
           {repos.data && !shown.length && (
             <p className="muted">
@@ -97,21 +98,21 @@ export default function LinkRepoModal({
             </p>
           )}
           {shown.length > 0 && (
-            <div className="pick-list" role="radiogroup">
+            <Radio.Group
+              className="pick-list"
+              value={chosen}
+              onChange={(e) => setChosen(e.target.value)}
+            >
               {shown.map((r) => (
-                <label className="check-row repo-option" key={r.full_name}>
-                  <input
-                    type="radio"
-                    name="repository"
-                    checked={chosen === r.full_name}
-                    onChange={() => setChosen(r.full_name)}
-                  />
+                <Radio
+                  className="check-row repo-option"
+                  key={r.full_name}
+                  value={r.full_name}
+                >
                   <span>
-                    <strong>{r.full_name}</strong>
-                    {r.private && <span className="badge">Private</span>}
-                    {r.full_name === current && (
-                      <span className="badge badge-active">Linked</span>
-                    )}
+                    <strong>{r.full_name}</strong>{' '}
+                    {r.private && <Tag>Private</Tag>}
+                    {r.full_name === current && <Tag color="green">Linked</Tag>}
                     <br />
                     <span className="muted">
                       {r.linked_projects.length
@@ -119,9 +120,9 @@ export default function LinkRepoModal({
                         : r.description || `Default branch ${r.default_branch}`}
                     </span>
                   </span>
-                </label>
+                </Radio>
               ))}
-            </div>
+            </Radio.Group>
           )}
         </fieldset>
         <div className="actions form-footer">
@@ -130,7 +131,8 @@ export default function LinkRepoModal({
           </Button>
           <Button
             type="submit"
-            disabled={!chosen || chosen === current || link.isPending}
+            loading={link.isPending}
+            disabled={!chosen || chosen === current}
           >
             Link
           </Button>
