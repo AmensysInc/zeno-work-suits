@@ -7,6 +7,20 @@ export interface User {
   email: string;
   role: Role;
   avatar_url: string | null;
+  is_admin?: boolean;
+  must_change_password?: boolean;
+}
+export interface AdminUser extends User {
+  is_admin: boolean;
+  is_active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+export interface IssuedLogin {
+  user: AdminUser;
+  temporary_password: string;
+  email_sent: boolean;
 }
 /** Admins run the whole workspace. Managers can open new projects. */
 export const canCreateProjects = (role?: string) =>

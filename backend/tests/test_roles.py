@@ -1,73 +1,44 @@
-def register(client, email, first="Nina"):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": first,
-            "last_name": "Kim",
-            "email": email,
-            "password": "Password123!",
-        },
-    )
-    return {"Authorization": "Bearer " + response.json()["access_token"]}
+from tests.conftest import create_user
 
 
-def test_admin_adds_people(client, auth):
+def test_admin_adds_people_with_a_role(client, auth):
     person = {
         "first_name": "Priya",
         "last_name": "Shah",
         "email": "Priya@Example.com",
-        "password": "Welcome123!",
         "role": "MANAGER",
+        "send_email": False,
     }
-    added = client.post("/api/auth/users", headers=auth, json=person)
+    added = client.post("/api/admin/users", headers=auth, json=person)
     assert added.status_code == 201, added.text
-    assert added.json()["email"] == "priya@example.com"
-    assert added.json()["role"] == "MANAGER"
-    assert "password_hash" not in added.json()
-    # They can sign in with the password the admin set.
+    assert added.json()["user"]["email"] == "priya@example.com"
+    assert added.json()["user"]["role"] == "MANAGER"
+    assert added.json()["user"]["is_admin"] is False
+    assert "password_hash" not in added.json()["user"]
     login = client.post(
         "/api/auth/login",
-        json={"email": "priya@example.com", "password": "Welcome123!"},
+        json={"email": "priya@example.com", "password": added.json()["temporary_password"]},
     )
     assert login.status_code == 200
-    assert client.post("/api/auth/users", headers=auth, json=person).status_code == 409
     assert (
         client.post(
-            "/api/auth/users", headers=auth, json={**person, "password": "short"}
+            "/api/admin/users", headers=auth, json={**person, "role": "OWNER"}
         ).status_code
         == 422
     )
+    # Managers run projects but do not manage accounts.
     manager = {"Authorization": "Bearer " + login.json()["access_token"]}
     other = {**person, "email": "other@example.com"}
-    assert client.post("/api/auth/users", headers=manager, json=other).status_code == 403
+    assert client.post("/api/admin/users", headers=manager, json=other).status_code == 403
 
 
 def test_roles_and_admin_access(client, auth):
     me = client.get("/api/auth/me", headers=auth).json()
     assert me["role"] == "ADMIN"
-    employee = register(client, "nina@example.com")
+    assert me["is_admin"] is True
+    employee = create_user(client, auth, "Nina", "Kim", "nina@example.com")
     nina = client.get("/api/auth/me", headers=employee).json()
     assert nina["role"] == "EMPLOYEE"
-    # A new account cannot pick its own role.
-    assert (
-        client.post(
-            "/api/auth/register",
-            json={
-                "first_name": "Sam",
-                "last_name": "Patel",
-                "email": "sam@example.com",
-                "password": "Password123!",
-                "role": "ADMIN",
-            },
-        ).status_code
-        == 201
-    )
-    logged_in = client.post(
-        "/api/auth/login",
-        json={"email": "sam@example.com", "password": "Password123!"},
-    )
-    manager = {"Authorization": "Bearer " + logged_in.json()["access_token"]}
-    assert client.get("/api/auth/me", headers=manager).json()["role"] == "EMPLOYEE"
 
     project = client.post(
         "/api/projects", headers=auth, json={"key": "HRMS", "name": "Quick HRMS"}
@@ -81,7 +52,7 @@ def test_roles_and_admin_access(client, auth):
     assert client.get("/api/auth/users", headers=employee).status_code == 403
     assert (
         client.patch(
-            f"/api/auth/users/{nina['id']}",
+            f"/api/admin/users/{nina['id']}",
             headers=employee,
             json={"role": "ADMIN"},
         ).status_code
@@ -89,7 +60,7 @@ def test_roles_and_admin_access(client, auth):
     )
 
     promoted = client.patch(
-        f"/api/auth/users/{nina['id']}", headers=auth, json={"role": "MANAGER"}
+        f"/api/admin/users/{nina['id']}", headers=auth, json={"role": "MANAGER"}
     )
     assert promoted.status_code == 200
     assert promoted.json()["role"] == "MANAGER"
@@ -111,18 +82,23 @@ def test_roles_and_admin_access(client, auth):
     assert edited.status_code == 200
     assert edited.json()["name"] == "Team space"
 
+
+def test_demoted_admin_loses_admin_access(client, auth):
+    nina = create_user(client, auth, "Nina", "Kim", "nina@example.com", role="ADMIN")
+    nina_id = client.get("/api/auth/me", headers=nina).json()["id"]
+    me = client.get("/api/auth/me", headers=auth).json()["id"]
+    # Another admin can demote Alex.
     assert (
         client.patch(
-            f"/api/auth/users/{me['id']}", headers=auth, json={"role": "EMPLOYEE"}
-        ).status_code
-        == 422
-    )
-    client.patch(
-        f"/api/auth/users/{nina['id']}", headers=auth, json={"role": "ADMIN"}
-    )
-    assert (
-        client.patch(
-            f"/api/auth/users/{me['id']}", headers=auth, json={"role": "EMPLOYEE"}
+            f"/api/admin/users/{me}", headers=nina, json={"role": "EMPLOYEE"}
         ).status_code
         == 200
+    )
+    assert client.get("/api/auth/me", headers=auth).json()["is_admin"] is False
+    # Alex can no longer manage accounts.
+    assert (
+        client.patch(
+            f"/api/admin/users/{nina_id}", headers=auth, json={"role": "EMPLOYEE"}
+        ).status_code
+        == 403
     )

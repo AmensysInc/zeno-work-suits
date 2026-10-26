@@ -1,3 +1,4 @@
+from tests.conftest import create_user
 def test_comment_ownership_and_activity(client, auth):
     p = client.post(
         "/api/projects", headers=auth, json={"key": "CO", "name": "Comments"}
@@ -10,16 +11,7 @@ def test_comment_ownership_and_activity(client, auth):
         headers=auth,
         json={"body": "Ready to review"},
     ).json()
-    token = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": "Nina",
-            "last_name": "Kim",
-            "email": "nina@example.com",
-            "password": "Password123!",
-        },
-    ).json()["access_token"]
-    other = {"Authorization": "Bearer " + token}
+    other = create_user(client, auth, "Nina", "Kim", "nina@example.com")
     assert (
         client.post(
             f"/api/projects/{p['id']}/members",

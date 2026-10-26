@@ -1,6 +1,7 @@
 import base64
 from app.core.config import settings
 from app.services import github
+from tests.conftest import create_user
 
 
 LOGIN_SOURCE = """
@@ -37,19 +38,6 @@ def fake_github(method, path, **kwargs):
     if path in files:
         return files[path]
     raise AssertionError(f"unexpected GitHub call {method} {path}")
-
-
-def register(client, email, first="Nina"):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": first,
-            "last_name": "Kim",
-            "email": email,
-            "password": "Password123!",
-        },
-    )
-    return {"Authorization": "Bearer " + response.json()["access_token"]}
 
 
 def project_with_repo(client, auth, monkeypatch):
@@ -184,7 +172,7 @@ def test_generate_reads_selected_branch(client, auth, monkeypatch):
 
 def test_outsider_cannot_generate(client, auth, monkeypatch):
     project = project_with_repo(client, auth, monkeypatch)
-    outsider = register(client, "out@example.com", "Omar")
+    outsider = create_user(client, auth, "Omar", "Kim", "out@example.com")
     denied = client.post(
         "/api/ai-generator/generate",
         headers=outsider,

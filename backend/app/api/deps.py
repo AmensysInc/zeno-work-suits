@@ -21,7 +21,8 @@ def current_user(
             credentials.credentials, settings.jwt_secret, algorithms=["HS256"]
         )
         user = db.get(User, int(payload["sub"]))
-        if not user:
+        # A disabled account loses access immediately, even with a still-valid token.
+        if not user or not user.is_active:
             raise ValueError()
         return user
     except (jwt.PyJWTError, ValueError, KeyError):
@@ -31,3 +32,12 @@ def current_user(
 
 
 Actor = Annotated[User, Depends(current_user)]
+
+
+def admin_user(actor: Actor):
+    if not actor.is_admin:
+        raise HTTPException(403, "Administrators only")
+    return actor
+
+
+Admin = Annotated[User, Depends(admin_user)]

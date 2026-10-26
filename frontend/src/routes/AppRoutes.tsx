@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 const LoginPage = lazy(() => import('../pages/LoginPage'));
@@ -22,7 +22,8 @@ const ReportsPage = lazy(() => import('../pages/ReportsPage'));
 const ProjectSettingsPage = lazy(() => import('../pages/ProjectSettingsPage'));
 const MyIssuesPage = lazy(() => import('../pages/MyIssuesPage'));
 const VoiceAgentPage = lazy(() => import('../pages/VoiceAgentPage'));
-const PeoplePage = lazy(() => import('../pages/PeoplePage'));
+const ChangePasswordPage = lazy(() => import('../pages/ChangePasswordPage'));
+const AdminUsersPage = lazy(() => import('../pages/AdminUsersPage'));
 const GitHubPage = lazy(() => import('../pages/GitHubPage'));
 const ChatPage = lazy(() => import('../pages/ChatPage'));
 const AutomationsPage = lazy(() => import('../pages/AutomationsPage'));
@@ -35,6 +36,10 @@ function RequireAuth() {
     <Navigate to="/login" replace />
   );
 }
+// Signed in but outside the app shell (first-login password change).
+function RequireToken({ children }: { children: React.ReactNode }) {
+  return localStorage.getItem('trackly_token') ? <>{children}</> : <Navigate to="/login" replace />;
+}
 export default function AppRoutes() {
   return (
     <Suspense
@@ -46,6 +51,14 @@ export default function AppRoutes() {
     >
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/change-password"
+          element={
+            <RequireToken>
+              <ChangePasswordPage />
+            </RequireToken>
+          }
+        />
         <Route element={<RequireAuth />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -98,12 +111,13 @@ export default function AppRoutes() {
             element={<TestCaseDetailsPage />}
           />
           <Route path="/my-issues" element={<MyIssuesPage />} />
-          <Route path="/people" element={<PeoplePage />} />
+          <Route path="/people" element={<Navigate to="/admin/users" replace />} />
           <Route path="/github" element={<GitHubPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/automations" element={<AutomationsPage />} />
           <Route path="/ai-generator" element={<AiGeneratorPage />} />
           <Route path="/voice-agent" element={<VoiceAgentPage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

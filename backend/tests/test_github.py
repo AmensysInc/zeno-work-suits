@@ -2,6 +2,7 @@ import httpx
 import pytest
 from app.core.config import settings
 from app.services import github
+from tests.conftest import create_user
 
 
 class FakeGitHub:
@@ -27,19 +28,6 @@ def gh(monkeypatch):
     monkeypatch.setattr(settings, "github_token", "test-token")
     monkeypatch.setattr(github, "_send", fake)
     return fake
-
-
-def register(client, email, first):
-    token = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": first,
-            "last_name": "Kim",
-            "email": email,
-            "password": "Password123!",
-        },
-    ).json()["access_token"]
-    return {"Authorization": "Bearer " + token}
 
 
 REPO = {
@@ -194,8 +182,8 @@ def test_link_branches_pulls_and_merge(client, auth, gh):
 
 
 def test_github_permissions(client, auth, gh):
-    nina = register(client, "nina@example.com", "Nina")
-    stranger = register(client, "eve@example.com", "Eve")
+    nina = create_user(client, auth, "Nina", "Kim", "nina@example.com")
+    stranger = create_user(client, auth, "Eve", "Kim", "eve@example.com")
     nina_id = client.get("/api/auth/me", headers=nina).json()["id"]
     p = client.post(
         "/api/projects",

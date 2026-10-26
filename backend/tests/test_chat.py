@@ -1,22 +1,12 @@
-def register(client, email, first="Nina"):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": first,
-            "last_name": "Kim",
-            "email": email,
-            "password": "Password123!",
-        },
-    )
-    return {"Authorization": "Bearer " + response.json()["access_token"]}
+from tests.conftest import create_user
 
 
 def test_project_chat_requires_project_access(client, auth):
     project = client.post(
         "/api/projects", headers=auth, json={"key": "CHAT", "name": "Chat Project"}
     ).json()
-    member_auth = register(client, "member@example.com")
-    outsider_auth = register(client, "outsider@example.com", "Olivia")
+    member_auth = create_user(client, auth, "Nina", "Kim", "member@example.com")
+    outsider_auth = create_user(client, auth, "Olivia", "Kim", "outsider@example.com")
     member = client.get("/api/auth/me", headers=member_auth).json()
 
     denied = client.get(f"/api/projects/{project['id']}/chat", headers=outsider_auth)
@@ -45,7 +35,7 @@ def test_project_chat_author_can_edit_and_delete(client, auth):
     project = client.post(
         "/api/projects", headers=auth, json={"key": "EDIT", "name": "Edit Project"}
     ).json()
-    other_auth = register(client, "other@example.com", "Omar")
+    other_auth = create_user(client, auth, "Omar", "Kim", "other@example.com")
     other = client.get("/api/auth/me", headers=other_auth).json()
     client.post(
         f"/api/projects/{project['id']}/members",

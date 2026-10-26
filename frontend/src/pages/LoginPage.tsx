@@ -80,7 +80,8 @@ export default function LoginPage() {
     try {
       const r = await api.post('/auth/login', data);
       localStorage.setItem('trackly_token', r.data.access_token);
-      nav('/dashboard');
+      const me = await api.get('/auth/me');
+      nav(me.data.must_change_password ? '/change-password' : '/dashboard');
     } catch (e) {
       setError(errorMessage(e));
     } finally {

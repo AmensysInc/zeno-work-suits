@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import (
     auth,
+    admin,
     projects,
     issues,
     criteria,
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 for module in (
     auth,
+    admin,
     projects,
     issues,
     criteria,

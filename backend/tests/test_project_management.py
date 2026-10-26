@@ -1,14 +1,4 @@
-def register(client, email, first="Nina"):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": first,
-            "last_name": "Patel",
-            "email": email,
-            "password": "Password123!",
-        },
-    )
-    return {"Authorization": "Bearer " + response.json()["access_token"]}
+from tests.conftest import create_user
 
 
 def project(client, auth, key="PM", **extra):
@@ -63,7 +53,7 @@ def test_board_type_setting(client, auth):
 
 def test_remove_member_unassigns_open_work(client, auth):
     p = project(client, auth)
-    nina = register(client, "nina@example.com")
+    nina = create_user(client, auth, "Nina", "Patel", "nina@example.com")
     members = client.post(
         f"/api/projects/{p['id']}/members",
         headers=auth,
@@ -130,7 +120,7 @@ def test_bulk_update_is_atomic_and_isolated(client, auth):
     assert rollback.status_code == 422
     assert client.get(f"/api/issues/{b['id']}", headers=auth).json()["sprint_id"] is None
     # Another user's issues cannot be touched through a batch.
-    other = register(client, "sam@example.com", "Sam")
+    other = create_user(client, auth, "Sam", "Patel", "sam@example.com")
     stranger = client.patch(
         "/api/issues/bulk",
         headers=other,
@@ -211,7 +201,7 @@ def test_delete_sprint_and_carry_over(client, auth):
     assert left["sprint_id"] is None and left["status"] == "BACKLOG"
     ids = [x["id"] for x in client.get(f"/api/projects/{p['id']}/sprints", headers=auth).json()]
     assert s3["id"] not in ids
-    other = register(client, "sam@example.com", "Sam")
+    other = create_user(client, auth, "Sam", "Patel", "sam@example.com")
     assert client.delete(f"/api/sprints/{s2['id']}", headers=other).status_code == 404
 
     report = client.get(f"/api/projects/{p['id']}/reports", headers=auth)
@@ -252,7 +242,7 @@ def test_reports(client, auth):
     assert sum(w["resolved"] for w in data["created_vs_resolved"]) == 1
     owner = next(w for w in data["workload"] if w["user"] is None)
     assert owner["open_issues"] == 2
-    other = register(client, "sam@example.com", "Sam")
+    other = create_user(client, auth, "Sam", "Patel", "sam@example.com")
     assert (
         client.get(f"/api/projects/{p['id']}/reports", headers=other).status_code
         == 404

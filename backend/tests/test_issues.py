@@ -1,3 +1,4 @@
+from tests.conftest import create_user
 def test_project_issue_flow_and_isolation(client, auth):
     p = client.post(
         "/api/projects", headers=auth, json={"key": "HRMS", "name": "Quick HRMS"}
@@ -30,16 +31,7 @@ def test_project_issue_flow_and_isolation(client, auth):
         ).status_code
         == 422
     )
-    token = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": "Other",
-            "last_name": "User",
-            "email": "other@example.com",
-            "password": "Password123!",
-        },
-    ).json()["access_token"]
-    other = {"Authorization": "Bearer " + token}
+    other = create_user(client, auth, "Other", "User", "other@example.com")
     assert client.get("/api/issues", headers=other).json() == []
     assert client.get(f"/api/issues/{id}", headers=other).status_code == 404
     assert client.delete(f"/api/projects/{p['id']}", headers=other).status_code == 404

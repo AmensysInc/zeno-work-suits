@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Popover, Space, Typography } from 'antd';
-import { LogoutOutlined } from '@ant-design/icons';
+import { KeyOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useMe } from '../../hooks/data';
 import { label } from '../../types';
 import { Badge } from '../ui/shared';
@@ -29,6 +29,13 @@ export default function SidebarProfile({ collapsed }: { collapsed: boolean }) {
               <Typography.Paragraph type="secondary">
                 {user.email}
               </Typography.Paragraph>
+              <Button
+                block
+                icon={<KeyOutlined />}
+                onClick={() => nav('/change-password')}
+              >
+                Change password
+              </Button>
               <Button
                 block
                 icon={<LogoutOutlined />}

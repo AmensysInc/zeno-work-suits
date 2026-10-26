@@ -78,6 +78,10 @@ export default function AppShell() {
     ? Number(match[1])
     : Number(new URLSearchParams(location.search).get('project')) ||
       pageProject;
+  // A temporary password from an admin must be replaced before using the app.
+  useEffect(() => {
+    if (me.data?.must_change_password) nav('/change-password', { replace: true });
+  }, [me.data?.must_change_password, nav]);
   useEffect(() => {
     if (!fromUrl) return;
     setLastProject(fromUrl);
@@ -110,7 +114,7 @@ export default function AppShell() {
         ],
         ['Automations', '/automations', <ThunderboltOutlined />],
         ...(me.data?.role === 'ADMIN'
-          ? [['People', '/people', <TeamOutlined />] as NavItem]
+          ? [['People', '/admin/users', <TeamOutlined />] as NavItem]
           : []),
       ],
     ],

@@ -1,14 +1,4 @@
-def register(client, email, first="Nina"):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": first,
-            "last_name": "Kim",
-            "email": email,
-            "password": "Password123!",
-        },
-    )
-    return {"Authorization": "Bearer " + response.json()["access_token"]}
+from tests.conftest import create_user
 
 
 def test_create_and_list_automation_rule(client, auth):
@@ -38,7 +28,7 @@ def test_automation_project_access_and_delete_owner(client, auth):
     project = client.post(
         "/api/projects", headers=auth, json={"key": "LOCK", "name": "Private"}
     ).json()
-    outsider_auth = register(client, "outsider@example.com", "Olivia")
+    outsider_auth = create_user(client, auth, "Olivia", "Kim", "outsider@example.com")
     blocked = client.post(
         "/api/automations",
         headers=outsider_auth,

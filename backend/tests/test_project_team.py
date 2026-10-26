@@ -1,14 +1,4 @@
-def register(client, email, first):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": first,
-            "last_name": "Kim",
-            "email": email,
-            "password": "Password123!",
-        },
-    )
-    return {"Authorization": "Bearer " + response.json()["access_token"]}
+from tests.conftest import create_user
 
 
 def me(client, headers):
@@ -72,8 +62,8 @@ def test_project_schedule_and_repository(client, auth):
 
 
 def test_assign_team_members_with_project_roles(client, auth):
-    nina = register(client, "nina@example.com", "Nina")
-    sam = register(client, "sam@example.com", "Sam")
+    nina = create_user(client, auth, "Nina", "Kim", "nina@example.com")
+    sam = create_user(client, auth, "Sam", "Kim", "sam@example.com")
     nina_id, sam_id = me(client, nina)["id"], me(client, sam)["id"]
     p = client.post(
         "/api/projects", headers=auth, json={"key": "TM", "name": "Team"}
@@ -121,6 +111,6 @@ def test_assign_team_members_with_project_roles(client, auth):
         == 403
     )
     # Managers can list people to assign; employees cannot.
-    client.patch(f"/api/auth/users/{sam_id}", headers=auth, json={"role": "MANAGER"})
+    client.patch(f"/api/admin/users/{sam_id}", headers=auth, json={"role": "MANAGER"})
     assert client.get("/api/auth/users", headers=sam).status_code == 200
     assert client.get("/api/auth/users", headers=nina).status_code == 403

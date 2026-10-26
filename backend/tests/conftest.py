@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.db.database import Base, get_db
 from app.main import app
 from app import models
+from app.core.security import hash_password
 
 
 @pytest.fixture
@@ -31,6 +32,7 @@ def client():
 
     app.dependency_overrides[get_db] = override
     with TestClient(app) as c:
+        c.sessions = sessions
         yield c
     app.dependency_overrides.clear()
     engine.dispose()
@@ -38,13 +40,40 @@ def client():
 
 @pytest.fixture
 def auth(client):
+    """Alex is the administrator (there is no public sign-up; the first admin is seeded)."""
+    with client.sessions() as db:
+        db.add(
+            models.User(
+                first_name="Alex",
+                last_name="Rivera",
+                email="alex@example.com",
+                password_hash=hash_password("Password123!"),
+                role="ADMIN",
+            )
+        )
+        db.commit()
     response = client.post(
-        "/api/auth/register",
-        json={
-            "first_name": "Alex",
-            "last_name": "Rivera",
-            "email": "alex@example.com",
-            "password": "Password123!",
-        },
+        "/api/auth/login", json={"email": "alex@example.com", "password": "Password123!"}
     )
     return {"Authorization": "Bearer " + response.json()["access_token"]}
+
+
+def create_user(client, admin_headers, first, last, email, role="EMPLOYEE"):
+    """Creates a regular user through the admin API and signs them in with the temporary password."""
+    issued = client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={
+            "first_name": first,
+            "last_name": last,
+            "email": email,
+            "role": role,
+            "send_email": False,
+        },
+    )
+    assert issued.status_code == 201, issued.text
+    token = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": issued.json()["temporary_password"]},
+    ).json()["access_token"]
+    return {"Authorization": "Bearer " + token}

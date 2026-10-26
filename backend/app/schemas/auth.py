@@ -1,5 +1,12 @@
+from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+
+def _max_72_bytes(value: str) -> str:
+    if len(value.encode()) > 72:
+        raise ValueError("Password must be at most 72 bytes")
+    return value
 
 
 class Login(BaseModel):
@@ -9,18 +16,20 @@ class Login(BaseModel):
     @field_validator("password")
     @classmethod
     def password_bytes(cls, value):
-        if len(value.encode()) > 72:
-            raise ValueError("Password must be at most 72 bytes")
-        return value
+        return _max_72_bytes(value)
 
 
-class Register(Login):
-    first_name: str = Field(min_length=1, max_length=80)
-    last_name: str = Field(min_length=1, max_length=80)
+class ChangePassword(BaseModel):
+    current_password: str = Field(min_length=1, max_length=72)
+    new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_bytes(cls, value):
+        return _max_72_bytes(value)
 
 
-class UserCreate(Register):
-    role: Literal["ADMIN", "MANAGER", "EMPLOYEE"] = "EMPLOYEE"
+Role = Literal["ADMIN", "MANAGER", "EMPLOYEE"]
 
 
 class UserOut(BaseModel):
@@ -31,12 +40,42 @@ class UserOut(BaseModel):
     email: str
     role: str
     avatar_url: str | None
-
-
-class RoleIn(BaseModel):
-    role: Literal["ADMIN", "MANAGER", "EMPLOYEE"]
+    is_admin: bool = False
+    must_change_password: bool = False
 
 
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+# ── admin ──
+class AdminUserOut(UserOut):
+    is_active: bool
+    created_at: datetime
+    last_login_at: datetime | None
+
+
+class AdminUserCreate(BaseModel):
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+    email: EmailStr
+    role: Role = "EMPLOYEE"
+    send_email: bool = True
+
+
+class AdminUserUpdate(BaseModel):
+    first_name: str | None = Field(default=None, min_length=1, max_length=80)
+    last_name: str | None = Field(default=None, min_length=1, max_length=80)
+    role: Role | None = None
+    is_active: bool | None = None
+
+
+class ResetPasswordIn(BaseModel):
+    send_email: bool = True
+
+
+class IssuedLogin(BaseModel):
+    user: AdminUserOut
+    temporary_password: str
+    email_sent: bool
