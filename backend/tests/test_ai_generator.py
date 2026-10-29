@@ -1,4 +1,6 @@
 import base64
+import json
+import httpx
 from app.core.config import settings
 from app.services import github
 from tests.conftest import create_user
@@ -28,7 +30,10 @@ def fake_github(method, path, **kwargs):
         ]
     }
     routes = {
-        ("GET", repo): {"default_branch": "main", "html_url": "https://github.com/acme/hr-portal"},
+        ("GET", repo): {
+            "default_branch": "main",
+            "html_url": "https://github.com/acme/hr-portal",
+        },
         ("GET", f"{repo}/git/ref/heads/main"): {"object": {"sha": "abc123def456"}},
         ("GET", f"{repo}/git/trees/main"): tree,
         ("GET", f"{repo}/git/trees/abc123def456"): tree,
@@ -113,61 +118,294 @@ def test_generate_review_save_and_trace_commit(client, auth, monkeypatch):
     issue = client.get(f"/api/issues/{issue_id}", headers=auth).json()
     assert issue["ai_source"]["source_commit"] == "abc123def456"
     assert issue["ai_source"]["repository"] == "acme/hr-portal"
+    assert issue["ai_source"]["source_kind"] == "DEFAULT"
+    assert issue["ai_source"]["source_ref"] == "main"
     test = client.get(f"/api/test-cases/{test_id}", headers=auth).json()
     assert test["ai_source"]["source_commit"] == "abc123def456"
+    # The happy path proves the first two criteria only, not every criterion.
+    assert len(test["criterion_ids"]) == 2
 
-    current = client.get(
-        f"/api/ai-generator/projects/{project['id']}/change-suggestions",
-        headers=auth,
-    )
+    url = f"/api/ai-generator/projects/{project['id']}/change-suggestions"
+    current = client.get(url, headers=auth)
     assert current.status_code == 200
     assert current.json()["stale_story_ids"] == []
 
-    def newer_github(method, path, **kwargs):
-        if path.endswith("/git/ref/heads/main"):
-            return {"object": {"sha": "fff999aaa111"}}
-        return fake_github(method, path, **kwargs)
+    def newer_github(changed_file):
+        def call(method, path, **kwargs):
+            if path.endswith("/git/ref/heads/main"):
+                return {"object": {"sha": "fff999aaa111"}}
+            if path.endswith("/compare/abc123def456...fff999aaa111"):
+                return {"files": [{"filename": changed_file}]}
+            return fake_github(method, path, **kwargs)
 
-    monkeypatch.setattr(github, "call", newer_github)
-    stale = client.get(
-        f"/api/ai-generator/projects/{project['id']}/change-suggestions",
-        headers=auth,
-    )
+        return call
+
+    # A newer commit that only touches docs leaves the module's items current.
+    monkeypatch.setattr(github, "call", newer_github("README.md"))
+    assert client.get(url, headers=auth).json()["stale_story_ids"] == []
+
+    monkeypatch.setattr(github, "call", newer_github("app/users.py"))
+    stale = client.get(url, headers=auth)
     assert stale.json()["stale_story_ids"] == [issue_id]
     assert test_id in stale.json()["stale_test_case_ids"]
     assert stale.json()["current_commit"] == "fff999aaa111"
 
 
-def test_generate_reads_selected_branch(client, auth, monkeypatch):
-    project = project_with_repo(client, auth, monkeypatch)
-    calls = []
+def with_routes(extra):
+    """fake_github plus extra routes; records every content path read."""
+    reads = []
 
-    def branch_github(method, path, **kwargs):
-        calls.append(path)
-        repo = "/repos/acme/hr-portal"
-        if path == f"{repo}/git/ref/heads/feature/login":
-            return {"object": {"sha": "bra9c4"}}
-        if path == f"{repo}/git/trees/bra9c4":
-            return {"tree": [{"path": "app/users.py", "type": "blob"}]}
+    def call(method, path, **kwargs):
+        if path in extra:
+            return extra[path]
+        if "/contents/" in path:
+            reads.append((path.split("/contents/")[1], kwargs["params"]["ref"]))
+            return {
+                "encoding": "base64",
+                "content": base64.b64encode(LOGIN_SOURCE.encode()).decode(),
+            }
         return fake_github(method, path, **kwargs)
 
-    monkeypatch.setattr(github, "call", branch_github)
-    draft = client.post(
-        "/api/ai-generator/generate",
-        headers=auth,
-        json={"project_id": project["id"], "branch": "feature/login"},
-    )
-    assert draft.status_code == 200, draft.text
-    assert draft.json()["source_commit"] == "bra9c4"
-    # The branch is named, so the default branch is never looked up.
-    assert "/repos/acme/hr-portal" not in calls
+    return call, reads
 
-    bad = client.post(
+
+def generate(client, auth, project, **body):
+    return client.post(
         "/api/ai-generator/generate",
         headers=auth,
-        json={"project_id": project["id"], "branch": "../main"},
+        json={"project_id": project["id"], **body},
     )
+
+
+def test_generate_reads_only_what_a_branch_changed(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    repo = "/repos/acme/hr-portal"
+    call, reads = with_routes(
+        {
+            f"{repo}/git/ref/heads/feature/login": {"object": {"sha": "bra9c4"}},
+            f"{repo}/compare/abc123def456...bra9c4": {
+                "files": [
+                    {
+                        "filename": "app/login.py",
+                        "status": "added",
+                        "changes": 40,
+                        "patch": "+def login(): ...",
+                    },
+                    {
+                        "filename": "tests/test_login.py",
+                        "status": "added",
+                        "changes": 90,
+                    },
+                    {"filename": "app/old.py", "status": "removed", "changes": 10},
+                    {"filename": "docs/login.md", "status": "added", "changes": 5},
+                ]
+            },
+        }
+    )
+    monkeypatch.setattr(github, "call", call)
+    draft = generate(client, auth, project, branch="feature/login")
+    assert draft.status_code == 200, draft.text
+    body = draft.json()
+    assert body["source_commit"] == "bra9c4"
+    assert (body["source_kind"], body["source_ref"]) == ("BRANCH", "feature/login")
+    # Changed source files only, at the branch tip, product code before tests.
+    assert reads == [("app/login.py", "bra9c4"), ("tests/test_login.py", "bra9c4")]
+
+    bad = generate(client, auth, project, branch="../main")
     assert bad.status_code == 422
+
+
+def test_branch_without_changes_reads_its_files(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    repo = "/repos/acme/hr-portal"
+    call, reads = with_routes(
+        {
+            f"{repo}/git/ref/heads/release": {"object": {"sha": "rel111"}},
+            f"{repo}/compare/abc123def456...rel111": {"files": []},
+            f"{repo}/git/trees/rel111": {
+                "tree": [{"path": "app/users.py", "type": "blob"}]
+            },
+        }
+    )
+    monkeypatch.setattr(github, "call", call)
+    body = generate(client, auth, project, branch="release").json()
+    assert reads == [("app/users.py", "rel111")]
+    assert any("no source changes" in note for note in body["notes"])
+
+
+def test_generate_reads_pull_request_head(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    repo = "/repos/acme/hr-portal"
+    files = [
+        {
+            "filename": "billing/invoice.py",
+            "status": "added",
+            "changes": 120,
+            "patch": "+class Invoice: ...",
+        },
+        {"filename": "app/users.py", "status": "modified", "changes": 3},
+        {"filename": "README.md", "status": "modified", "changes": 1},
+    ]
+    call, reads = with_routes(
+        {
+            f"{repo}/pulls/12": {
+                "head": {"sha": "prhead77"},
+                "title": "Invoices",
+                "body": "",
+            },
+            f"{repo}/pulls/12/files": files,
+            f"{repo}/pulls/13": {"head": {"sha": "docs88"}, "title": "Docs"},
+            f"{repo}/pulls/13/files": [{"filename": "README.md", "status": "modified"}],
+        }
+    )
+    monkeypatch.setattr(github, "call", call)
+    body = generate(client, auth, project, pull_number=12).json()
+    assert (body["source_kind"], body["source_ref"], body["source_commit"]) == (
+        "PULL",
+        "12",
+        "prhead77",
+    )
+    # The PR's own head commit, including a folder main does not have yet.
+    assert reads == [("billing/invoice.py", "prhead77"), ("app/users.py", "prhead77")]
+
+    reads.clear()
+    generate(client, auth, project, pull_number=12, module_path="app")
+    assert reads == [("app/users.py", "prhead77")]
+
+    docs = generate(client, auth, project, pull_number=13)
+    assert docs.status_code == 422
+    assert "changes no source files" in docs.json()["detail"]
+
+    both = generate(client, auth, project, pull_number=12, branch="main")
+    assert both.status_code == 422
+
+
+def test_generate_reads_one_commit(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    repo = "/repos/acme/hr-portal"
+    call, reads = with_routes(
+        {
+            f"{repo}/commits/c0ffee1": {
+                "sha": "c0ffee1234567890",
+                "commit": {"message": "Add role check"},
+                "files": [
+                    {"filename": "app/roles.py", "status": "modified", "changes": 8}
+                ],
+            },
+        }
+    )
+    monkeypatch.setattr(github, "call", call)
+    body = generate(client, auth, project, commit="c0ffee1").json()
+    assert (body["source_kind"], body["source_commit"]) == (
+        "COMMIT",
+        "c0ffee1234567890",
+    )
+    assert reads == [("app/roles.py", "c0ffee1234567890")]
+    assert generate(client, auth, project, commit="not-a-sha").status_code == 422
+
+
+class FakeResponse:
+    def __init__(self, status_code, body):
+        self.status_code = status_code
+        self._body = body
+
+    def json(self):
+        return self._body
+
+
+def test_ai_answer_is_repaired_not_rejected(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
+    answer = {
+        "user_stories": [
+            {
+                "title": "Restrict roles",
+                "priority": "High",
+                "story_points": "5",
+                "acceptance_criteria": [f"Criterion {i}" for i in range(15)],
+                "test_cases": [
+                    {
+                        "title": "Reject unknown role",
+                        "test_type": "Negative",
+                        "priority": "critical",
+                        "covers": [1, "Criterion 2", 99],
+                    },
+                ],
+            },
+            {"description": "no title, dropped"},
+        ],
+        "notes": ["Roles come from users.py"],
+    }
+    content = {"choices": [{"message": {"content": json.dumps(answer)}}]}
+    monkeypatch.setattr(
+        "app.services.ai_generator.httpx.post",
+        lambda *a, **k: FakeResponse(200, content),
+    )
+    body = generate(client, auth, project, module_path="app").json()
+    [story] = body["user_stories"]
+    assert (story["title"], story["priority"], story["story_points"]) == (
+        "Restrict roles",
+        "HIGH",
+        5,
+    )
+    assert len(story["acceptance_criteria"]) == 12
+    [test] = story["test_cases"]
+    assert (test["test_type"], test["priority"], test["criteria"]) == (
+        "FUNCTIONAL",
+        "CRITICAL",
+        [1, 2],
+    )
+    assert "Roles come from users.py" in body["notes"]
+    assert not any("AI draft unavailable" in note for note in body["notes"])
+
+
+def test_fallback_says_why(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    body = generate(client, auth, project).json()
+    assert any("OPENAI_API_KEY" in note for note in body["notes"])
+
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
+    monkeypatch.setattr(
+        "app.services.ai_generator.httpx.post",
+        lambda *a, **k: FakeResponse(429, {"error": {"message": "quota"}}),
+    )
+    body = generate(client, auth, project).json()
+    assert body["user_stories"]
+    assert any("rate limit or quota" in note for note in body["notes"])
+
+    def timeout(*a, **k):
+        raise httpx.ReadTimeout("slow")
+
+    monkeypatch.setattr("app.services.ai_generator.httpx.post", timeout)
+    body = generate(client, auth, project).json()
+    assert any("within 60 seconds" in note for note in body["notes"])
+
+
+def test_items_follow_their_own_branch(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    repo = "/repos/acme/hr-portal"
+    branch_head = {"sha": "bra9c4"}
+    call, _ = with_routes({})
+
+    def github_call(method, path, **kwargs):
+        if path == f"{repo}/git/ref/heads/feature/login":
+            return {"object": {"sha": branch_head["sha"]}}
+        if path == f"{repo}/compare/abc123def456...bra9c4":
+            return {
+                "files": [{"filename": "app/login.py", "status": "added", "changes": 4}]
+            }
+        if path == f"{repo}/compare/bra9c4...bra9c5":
+            return {"files": [{"filename": "app/login.py", "status": "modified"}]}
+        return call(method, path, **kwargs)
+
+    monkeypatch.setattr(github, "call", github_call)
+    draft = generate(client, auth, project, branch="feature/login").json()
+    saved = client.post("/api/ai-generator/save", headers=auth, json=draft).json()
+    url = f"/api/ai-generator/projects/{project['id']}/change-suggestions"
+    # Main is unchanged and so is the branch: not stale, though main differs.
+    assert client.get(url, headers=auth).json()["stale_story_ids"] == []
+    branch_head["sha"] = "bra9c5"
+    assert client.get(url, headers=auth).json()["stale_story_ids"] == saved["issue_ids"]
 
 
 def test_outsider_cannot_generate(client, auth, monkeypatch):

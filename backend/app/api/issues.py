@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Response
-from sqlalchemy import select, or_
+from sqlalchemy import func, select, or_
 from app.api.deps import DB, Actor
-from app.models import Project
-from app.models import Issue
+from app.models import ActivityLog, Issue, Project
 from app.schemas.issue import (
     IssueIn,
     IssueOut,
@@ -32,7 +31,29 @@ def index(
         )
     if mine:
         query = query.where(Issue.assignee_id == actor.id)
-    return db.scalars(query.order_by(Issue.order_index, Issue.id)).all()
+    items = db.scalars(query.order_by(Issue.order_index, Issue.id)).all()
+    # When each finished issue was last moved to Done, as the reports count it.
+    done_ids = [i.id for i in items if i.status == "DONE"]
+    resolved = (
+        dict(
+            db.execute(
+                select(ActivityLog.issue_id, func.max(ActivityLog.created_at))
+                .where(
+                    ActivityLog.issue_id.in_(done_ids),
+                    ActivityLog.field_name == "status",
+                    ActivityLog.new_value == "DONE",
+                )
+                .group_by(ActivityLog.issue_id)
+            ).all()
+        )
+        if done_ids
+        else {}
+    )
+    for item in items:
+        item.resolved_at = (
+            resolved.get(item.id, item.updated_at) if item.status == "DONE" else None
+        )
+    return items
 
 
 @router.post("", response_model=IssueOut, status_code=201)
@@ -62,6 +83,5 @@ def status(id: int, data: StatusIn, db: DB, actor: Actor):
 
 @router.delete("/{id}", status_code=204)
 def delete(id: int, db: DB, actor: Actor):
-    db.delete(issue_access(db, id, actor))
-    db.commit()
+    issues.delete(db, id, actor)
     return Response(status_code=204)

@@ -21,7 +21,9 @@ def main(argv):
         return 2
     try:
         # Same rules as the sign-in form, so we never create an admin who can't log in.
-        email = validate_email(argv[1].strip(), check_deliverability=False).normalized.lower()
+        email = validate_email(
+            argv[1].strip(), check_deliverability=False
+        ).normalized.lower()
     except EmailNotValidError as exc:
         print(f"Invalid email: {exc}")
         return 2

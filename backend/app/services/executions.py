@@ -1,8 +1,8 @@
 from datetime import date
 from fastapi import HTTPException
 from sqlalchemy import select
-from app.models import TestCase, TestExecution, TestExecutionStep, Sprint
-from app.services.access import project_access, child_access
+from app.models import Project, TestCase, TestExecution, TestExecutionStep, Sprint
+from app.services.access import project_access, child_access, require_lead
 from app.services.activity import record
 
 
@@ -91,6 +91,9 @@ def save(db, actor, data, id=None):
 
 def delete(db, actor, id):
     item = child_access(db, TestExecution, id, actor)
+    # Run history is QA evidence: only its tester or a lead may remove it.
+    if item.tester_id != actor.id:
+        require_lead(db, actor, db.get(Project, item.project_id))
     test_case = item.test_case
     db.delete(item)
     sync_status(db, test_case)

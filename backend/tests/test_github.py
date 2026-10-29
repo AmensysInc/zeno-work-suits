@@ -107,8 +107,17 @@ def test_link_branches_pulls_and_merge(client, auth, gh):
     assert data["can_merge"] is True
     assert data["branches"][0] == {"name": "main", "sha": "abc123", "protected": True}
 
-    gh.on("GET", "/repos/acme/hr-portal/git/ref/heads/main", body={"object": {"sha": "abc123"}})
-    gh.on("POST", "/repos/acme/hr-portal/git/refs", 201, {"ref": "refs/heads/feature/leave"})
+    gh.on(
+        "GET",
+        "/repos/acme/hr-portal/git/ref/heads/main",
+        body={"object": {"sha": "abc123"}},
+    )
+    gh.on(
+        "POST",
+        "/repos/acme/hr-portal/git/refs",
+        201,
+        {"ref": "refs/heads/feature/leave"},
+    )
     made = client.post(
         f"/api/github/projects/{p['id']}/branches",
         headers=auth,
@@ -153,7 +162,11 @@ def test_link_branches_pulls_and_merge(client, auth, gh):
     gh.on(
         "PUT",
         "/repos/acme/hr-portal/pulls/8/merge",
-        body={"merged": True, "message": "Pull Request successfully merged", "sha": "def"},
+        body={
+            "merged": True,
+            "message": "Pull Request successfully merged",
+            "sha": "def",
+        },
     )
     merged = client.put(
         f"/api/github/projects/{p['id']}/pulls/8/merge",
@@ -175,9 +188,7 @@ def test_link_branches_pulls_and_merge(client, auth, gh):
     assert conflict.status_code == 409
     assert conflict.json()["detail"] == "Pull Request is not mergeable"
 
-    unlinked = client.delete(
-        f"/api/github/projects/{p['id']}/repository", headers=auth
-    )
+    unlinked = client.delete(f"/api/github/projects/{p['id']}/repository", headers=auth)
     assert unlinked.json()["github_repo"] == ""
 
 

@@ -17,9 +17,7 @@ def upgrade():
         ),
     )
     # Keep a manager of the workspace: the earliest account, then the demo logins.
-    op.execute(
-        "UPDATE users SET role = 'ADMIN' WHERE id = (SELECT MIN(id) FROM users)"
-    )
+    op.execute("UPDATE users SET role = 'ADMIN' WHERE id = (SELECT MIN(id) FROM users)")
     op.execute("UPDATE users SET role = 'ADMIN' WHERE email = 'alex@trackly.demo'")
     op.execute("UPDATE users SET role = 'MANAGER' WHERE email = 'sam@trackly.demo'")
     op.execute("UPDATE users SET role = 'EMPLOYEE' WHERE email = 'nina@trackly.demo'")

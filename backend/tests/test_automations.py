@@ -46,4 +46,7 @@ def test_automation_project_access_and_delete_owner(client, auth):
         json={"name": "Personal rule", "to_status": "TESTING"},
     )
     assert own.status_code == 201
-    assert client.delete(f"/api/automations/{own.json()['id']}", headers=auth).status_code == 204
+    assert (
+        client.delete(f"/api/automations/{own.json()['id']}", headers=auth).status_code
+        == 204
+    )

@@ -33,6 +33,6 @@ def edit(id: int, data: ChatMessageIn, db: DB, actor: Actor):
 
 @router.delete("/chat/{id}", status_code=204)
 def delete(id: int, db: DB, actor: Actor):
-    db.delete(chat.owned(db, id, actor))
+    db.delete(chat.owned(db, id, actor, moderate=True))
     db.commit()
     return Response(status_code=204)

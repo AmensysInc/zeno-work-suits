@@ -96,9 +96,7 @@ def test_step_needs_action_unless_reusable(client, auth):
 
 def test_criteria_coverage_must_match_story(client, auth):
     p, story, criteria = setup(client, auth)
-    tc, data = make_test(
-        client, auth, p, story, criterion_ids=[criteria[0]["id"]]
-    )
+    tc, data = make_test(client, auth, p, story, criterion_ids=[criteria[0]["id"]])
     assert tc["criterion_ids"] == [criteria[0]["id"]]
     other = client.post(
         "/api/issues", headers=auth, json={"project_id": p["id"], "summary": "Other"}
@@ -162,22 +160,25 @@ def test_executions_drive_status_and_keep_history(client, auth):
     ).json()
     assert second["sprint_id"] is None
     assert second["executed_on"] == date.today().isoformat()
-    assert client.get(f"/api/test-cases/{tc['id']}", headers=auth).json()[
-        "status"
-    ] == "PASSED"
+    assert (
+        client.get(f"/api/test-cases/{tc['id']}", headers=auth).json()["status"]
+        == "PASSED"
+    )
     listed = client.get(
         f"/api/test-executions?sprint_id={sprint['id']}", headers=auth
     ).json()
     assert [r["id"] for r in listed] == [run["id"]]
 
     client.delete(f"/api/test-executions/{second['id']}", headers=auth)
-    assert client.get(f"/api/test-cases/{tc['id']}", headers=auth).json()[
-        "status"
-    ] == "FAILED"
+    assert (
+        client.get(f"/api/test-cases/{tc['id']}", headers=auth).json()["status"]
+        == "FAILED"
+    )
     client.delete(f"/api/test-executions/{run['id']}", headers=auth)
-    assert client.get(f"/api/test-cases/{tc['id']}", headers=auth).json()[
-        "status"
-    ] == "NOT_RUN"
+    assert (
+        client.get(f"/api/test-cases/{tc['id']}", headers=auth).json()["status"]
+        == "NOT_RUN"
+    )
 
 
 def test_execution_validation(client, auth):
@@ -258,7 +259,9 @@ def test_qa_data_is_private_to_members(client, auth):
         json={"test_case_id": tc["id"], "status": "PASSED"},
     ).json()
     eve = create_user(client, auth, "Eve", "Out", "eve@example.com")
-    assert client.get(f"/api/test-executions/{run['id']}", headers=eve).status_code == 404
+    assert (
+        client.get(f"/api/test-executions/{run['id']}", headers=eve).status_code == 404
+    )
     assert client.get("/api/test-executions", headers=eve).json() == []
     assert (
         client.get(f"/api/projects/{p['id']}/traceability", headers=eve).status_code

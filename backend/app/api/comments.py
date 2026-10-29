@@ -29,7 +29,7 @@ def edit(id: int, data: CommentIn, db: DB, actor: Actor):
 
 @router.delete("/comments/{id}", status_code=204)
 def delete(id: int, db: DB, actor: Actor):
-    db.delete(comments.owned(db, id, actor))
+    db.delete(comments.owned(db, id, actor, moderate=True))
     db.commit()
     return Response(status_code=204)
 

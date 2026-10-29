@@ -33,6 +33,13 @@ export const canManageProject = (
   !!me &&
   (me.role === 'ADMIN' ||
     (me.role === 'MANAGER' && me.id === project.owner_id));
+/** Who runs sprints and deletes work: managers of the project and its leads. */
+export const canLeadProject = (
+  me: Pick<User, 'id' | 'role'> | undefined,
+  project: Pick<Project, 'owner_id' | 'team'>,
+) =>
+  canManageProject(me, project) ||
+  project.team.some((m) => m.user.id === me?.id && m.role === 'LEAD');
 export const projectRoles = [
   'LEAD',
   'DEVELOPER',
@@ -115,10 +122,14 @@ export const generatorCoverage = [
   'VALIDATION',
 ] as const;
 export type GeneratorCoverage = (typeof generatorCoverage)[number];
+/** A folder of the default branch, or what a branch, pull request or commit changed. */
+export type GeneratorSourceKind = 'DEFAULT' | 'BRANCH' | 'PULL' | 'COMMIT';
 export interface AiSource {
   repository: string;
   module_path: string;
   source_commit: string;
+  source_kind?: GeneratorSourceKind;
+  source_ref?: string;
   generator?: string;
 }
 export interface GeneratorModule {
@@ -138,6 +149,8 @@ export interface GeneratedTestCase {
   test_data: string;
   expected_result: string;
   steps: GeneratedStep[];
+  /** Indexes of the story's acceptance criteria this test proves. */
+  criteria: number[];
 }
 export interface GeneratedStory {
   title: string;
@@ -152,6 +165,8 @@ export interface GeneratedDraft {
   repository: string;
   module_path: string;
   source_commit: string;
+  source_kind: GeneratorSourceKind;
+  source_ref: string;
   output_type: GeneratorOutput;
   coverage: GeneratorCoverage[];
   user_stories: GeneratedStory[];
@@ -207,6 +222,8 @@ export interface Issue {
   related_execution_id: number | null;
   assignee: User | null;
   reporter: User;
+  /** When a Done item was last moved to Done (issue lists only). */
+  resolved_at?: string | null;
 }
 export interface Sprint {
   id: number;

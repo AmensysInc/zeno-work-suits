@@ -144,9 +144,7 @@ def project_report(db, project_id, actor, sprint_id=None, today=None):
         weeks.append(
             {
                 "week": start,
-                "created": sum(
-                    1 for i in work if start <= _day(i.created_at) < end
-                ),
+                "created": sum(1 for i in work if start <= _day(i.created_at) < end),
                 "resolved": sum(
                     1 for i in work if i.id in done_on and start <= done_on[i.id] < end
                 ),

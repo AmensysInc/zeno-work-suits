@@ -1,7 +1,8 @@
 from fastapi import HTTPException
 from sqlalchemy import select, update
 from app.models import Issue, Project, Sprint, TestCase, TestExecution
-from app.services.access import project_access, issue_access
+from app.services import automations
+from app.services.access import project_access, issue_access, require_lead
 from app.services.activity import record
 
 
@@ -25,8 +26,12 @@ def validate_links(db, project, values, current=None):
                 "BUG",
             ):
                 raise HTTPException(422, "Subtasks require a story, task or bug parent")
-    if issue_type == "SUBTASK" and not values.get(
-        "parent_issue_id", getattr(current, "parent_issue_id", None)
+    # Checked when a subtask is created or its parent is cleared, so a subtask
+    # orphaned before deletes took subtasks along can still be worked on.
+    if (
+        issue_type == "SUBTASK"
+        and (current is None or "parent_issue_id" in values)
+        and not values.get("parent_issue_id")
     ):
         raise HTTPException(422, "A subtask needs a parent")
     if values.get("assignee_id") and values["assignee_id"] not in {
@@ -71,9 +76,8 @@ def validate_links(db, project, values, current=None):
         raise HTTPException(422, "Due date must be on or after start date")
 
 
-def create(db, data, actor):
-    project = project_access(db, data.project_id, actor, lock=True)
-    values = data.model_dump()
+def add(db, project, values, actor):
+    """Creates an issue in the open transaction; the caller commits."""
     validate_links(db, project, values)
     counter = db.scalar(
         update(Project)
@@ -85,16 +89,31 @@ def create(db, data, actor):
     db.add(issue)
     db.flush()
     record(db, actor, project.id, issue.id, "created issue")
+    return issue
+
+
+def create(db, data, actor):
+    project = project_access(db, data.project_id, actor, lock=True)
+    issue = add(db, project, data.model_dump(), actor)
     db.commit()
     return issue
+
+
+def _notify(notifications):
+    # Sent after commit, so an email never announces a change that rolled back.
+    for send in notifications:
+        send()
 
 
 def edit(db, id, data, actor):
     issue = issue_access(db, id, actor)
     project = project_access(db, issue.project_id, actor, lock=True)
     db.refresh(issue)
-    apply(db, project, issue, data.model_dump(exclude_unset=True), actor)
+    notifications = apply(
+        db, project, issue, data.model_dump(exclude_unset=True), actor
+    )
     db.commit()
+    _notify(notifications)
     return issue
 
 
@@ -102,17 +121,32 @@ def bulk_edit(db, ids, data, actor):
     """Apply the same change to several issues; all succeed or none do."""
     values = data.model_dump(exclude_unset=True)
     changed = []
+    notifications = []
     for id in dict.fromkeys(ids):
         issue = issue_access(db, id, actor)
         project = project_access(db, issue.project_id, actor, lock=True)
         db.refresh(issue)
-        apply(db, project, issue, dict(values), actor)
+        notifications += apply(db, project, issue, dict(values), actor)
         changed.append(issue)
     db.commit()
+    _notify(notifications)
     return changed
 
 
+def delete(db, id, actor):
+    """Deletes an issue with its subtasks; its test cases and runs go with it."""
+    issue = issue_access(db, id, actor)
+    project = project_access(db, issue.project_id, actor, lock=True)
+    require_lead(db, actor, project)
+    for subtask in db.scalars(select(Issue).where(Issue.parent_issue_id == issue.id)):
+        db.delete(subtask)
+    record(db, actor, project.id, None, "deleted issue", new=issue.issue_key)
+    db.delete(issue)
+    db.commit()
+
+
 def apply(db, project, issue, values, actor):
+    """Applies changes to one issue; returns notifications to send after commit."""
     for key in (
         "summary",
         "description",
@@ -134,8 +168,12 @@ def apply(db, project, issue, values, actor):
         and issue.status == "TODO"
     ):
         values["status"] = "BACKLOG"
+    old_status = issue.status
     for key, value in values.items():
         old = getattr(issue, key)
         if old != value:
             record(db, actor, project.id, issue.id, "changed", key, old, value)
             setattr(issue, key, value)
+    if issue.status == old_status:
+        return []
+    return automations.run(db, actor, project, issue)

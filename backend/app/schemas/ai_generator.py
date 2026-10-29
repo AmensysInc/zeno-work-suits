@@ -1,10 +1,13 @@
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from app.schemas.github import BRANCH, git_branch
 from app.schemas.issue import Priority
 
 OutputType = Literal["USER_STORIES", "TEST_CASES", "BOTH"]
 CoverageType = Literal["POSITIVE", "NEGATIVE", "BOUNDARY", "VALIDATION"]
+# Where the code came from: a folder of the default branch, or the changes of a
+# branch, pull request or single commit.
+SourceKind = Literal["DEFAULT", "BRANCH", "PULL", "COMMIT"]
 
 
 class GeneratorStatusOut(BaseModel):
@@ -26,8 +29,11 @@ class PullModuleOut(BaseModel):
 class GenerateIn(BaseModel):
     project_id: int
     module_path: str = ""
-    # Empty reads the repository's default branch.
+    # At most one of branch, pull_number and commit. None of them reads the
+    # module from the default branch; each of them reads only what it changed.
     branch: str = Field(default="", max_length=200, pattern=r"^$|" + BRANCH)
+    pull_number: int | None = Field(default=None, ge=1)
+    commit: str = Field(default="", pattern=r"^$|^[0-9a-fA-F]{7,40}$")
     output_type: OutputType = "BOTH"
     coverage: list[CoverageType] = Field(default_factory=lambda: ["POSITIVE"])
 
@@ -35,6 +41,12 @@ class GenerateIn(BaseModel):
     @classmethod
     def _branch(cls, value):
         return git_branch(value) if value else value
+
+    @model_validator(mode="after")
+    def _one_source(self):
+        if sum(map(bool, (self.branch, self.pull_number, self.commit))) > 1:
+            raise ValueError("Choose a branch, a pull request or a commit, not several")
+        return self
 
 
 class GeneratedStep(BaseModel):
@@ -53,6 +65,8 @@ class GeneratedTestCase(BaseModel):
     test_data: str = ""
     expected_result: str = ""
     steps: list[GeneratedStep] = Field(default_factory=list, max_length=20)
+    # Indexes into the story's acceptance criteria that this test proves.
+    criteria: list[int] = Field(default_factory=list, max_length=12)
 
 
 class GeneratedStory(BaseModel):
@@ -69,6 +83,9 @@ class GeneratedDraft(BaseModel):
     repository: str
     module_path: str
     source_commit: str
+    source_kind: SourceKind = "DEFAULT"
+    # The branch name, pull request number or commit SHA the draft was read from.
+    source_ref: str = ""
     output_type: OutputType
     coverage: list[CoverageType]
     user_stories: list[GeneratedStory] = Field(default_factory=list, max_length=20)

@@ -1,4 +1,4 @@
-import type { Execution, Issue, TestCase, TraceStory, User } from '../types';
+import type { Execution, Issue, TestCase, TraceStory, User } from '@/types';
 
 export const fullName = (u?: Pick<User, 'first_name' | 'last_name'> | null) =>
   u ? `${u.first_name} ${u.last_name}` : 'Unassigned';
@@ -66,3 +66,11 @@ export function storyHealth(story: TraceStory): Health {
 
 export const percent = (part: number, total: number) =>
   total ? Math.round((part / total) * 100) : 0;
+
+export const testColor: Record<string, string> = {
+  NOT_RUN: '#c4c6cd',
+  PASSED: '#16a34a',
+  FAILED: '#e5484d',
+  BLOCKED: '#d97706',
+  SKIPPED: '#8b8f9a',
+};

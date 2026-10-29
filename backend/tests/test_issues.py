@@ -1,4 +1,6 @@
 from tests.conftest import create_user
+
+
 def test_project_issue_flow_and_isolation(client, auth):
     p = client.post(
         "/api/projects", headers=auth, json={"key": "HRMS", "name": "Quick HRMS"}

@@ -93,7 +93,7 @@ npm ci
 npm run dev
 ```
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Vite proxies `/api` to port 8000.
+Open [http://localhost:5173](http://localhost:5173). Next.js proxies `/api` to `API_ORIGIN` (default port 8000).
 
 Demo credentials, created only by the explicit seed command:
 
@@ -216,7 +216,7 @@ This deliverable is a local development MVP; it is not published. For deployment
 - Database connection problem: use `127.0.0.1`, verify port `5433` and `docker compose ps`, and run backend commands from `backend/`.
 - Empty new account: create a project or ask its owner to add your registered email.
 - Empty board: start a planned sprint in Backlog or Sprints.
-- Port 5173 occupied: stop the other service or change Vite's port and update CORS origins.
+- Port 5173 occupied: stop the other service or change the port in `frontend/package.json` and update CORS origins.
 - Authentication expired: sign in again.
 
 See `VERIFICATION.md` for checks performed on the delivered version.

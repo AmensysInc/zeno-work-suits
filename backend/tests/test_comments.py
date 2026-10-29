@@ -1,4 +1,6 @@
 from tests.conftest import create_user
+
+
 def test_comment_ownership_and_activity(client, auth):
     p = client.post(
         "/api/projects", headers=auth, json={"key": "CO", "name": "Comments"}

@@ -25,9 +25,7 @@ def upgrade():
         sa.ForeignKeyConstraint(["created_by"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_shared_steps_project_id"), "shared_steps", ["project_id"]
-    )
+    op.create_index(op.f("ix_shared_steps_project_id"), "shared_steps", ["project_id"])
     op.add_column(
         "test_case_steps",
         sa.Column("test_data", sa.Text(), nullable=False, server_default=""),

@@ -18,7 +18,9 @@ class User(Timestamps, Base):
     # ADMIN sees every project. MANAGER runs projects they own. EMPLOYEE works inside them.
     role: Mapped[str] = mapped_column(String(20), default="EMPLOYEE")
     avatar_url: Mapped[str | None] = mapped_column(String(1000))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true()
+    )
     # Set when an admin issues a temporary password; the user must pick their own on next sign-in.
     must_change_password: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false()

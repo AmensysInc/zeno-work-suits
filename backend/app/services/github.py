@@ -5,8 +5,13 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from app.core.config import settings
 from app.models import Project
-from app.models.project import project_members
-from app.services.access import can_manage_project, project_access, visible_projects
+from app.services.access import (
+    can_lead,
+    can_manage_project,
+    is_admin,
+    project_access,
+    visible_projects,
+)
 
 GITHUB_API = "https://api.github.com"
 REPO_URL = re.compile(r"^https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?$")
@@ -70,15 +75,7 @@ def repo_name(url):
 
 def can_merge(db, actor, project):
     """Admins, managers who own the project, and the project's leads can merge."""
-    if can_manage_project(actor, project):
-        return True
-    role = db.scalar(
-        select(project_members.c.role).where(
-            project_members.c.project_id == project.id,
-            project_members.c.user_id == actor.id,
-        )
-    )
-    return role == "LEAD"
+    return can_lead(db, actor, project)
 
 
 def linked_repo(db, project_id, actor):
@@ -89,6 +86,22 @@ def linked_repo(db, project_id, actor):
     return project, name
 
 
+def _owner_allowed(full_name):
+    owners = {o.lower() for o in settings.github_allowed_owners}
+    return not owners or full_name.split("/")[0].lower() in owners
+
+
+def _taken(db, actor):
+    """Repositories (lowercase) linked to projects this person does not manage."""
+    if is_admin(actor):
+        return set()
+    return {
+        name.lower()
+        for p in db.scalars(select(Project).where(Project.github_repo != ""))
+        if (name := repo_name(p.github_repo)) and not can_manage_project(actor, p)
+    }
+
+
 def list_repos(db, actor):
     if actor.role not in ("ADMIN", "MANAGER"):
         raise HTTPException(403, "Only an admin or a manager can link repositories")
@@ -97,6 +110,7 @@ def list_repos(db, actor):
         name = repo_name(p.github_repo)
         if name:
             linked.setdefault(name.lower(), []).append(p.name)
+    taken = _taken(db, actor)
     repos = []
     for page in range(1, MAX_REPO_PAGES + 1):
         batch = call(
@@ -117,11 +131,22 @@ def list_repos(db, actor):
             "linked_projects": linked.get(r["full_name"].lower(), []),
         }
         for r in repos
+        # Managers only see repositories they may link (see link()).
+        if _owner_allowed(r["full_name"]) and r["full_name"].lower() not in taken
     ]
 
 
 def link(db, project_id, full_name, actor):
     project = project_access(db, project_id, actor, owner=True)
+    if not _owner_allowed(full_name):
+        raise HTTPException(
+            403, "Only repositories of the allowed GitHub organizations can be linked"
+        )
+    if full_name.lower() in _taken(db, actor):
+        raise HTTPException(
+            403,
+            "This repository belongs to another team's project; ask an admin to link it",
+        )
     repo = call("GET", f"/repos/{full_name}")
     project.github_repo = repo["html_url"]
     db.commit()

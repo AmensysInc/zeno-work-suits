@@ -1,5 +1,8 @@
+import hashlib
+import hmac
+from urllib.parse import quote
 import httpx
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Query, UploadFile
 from app.api.deps import Actor
 from app.core.config import settings
 
@@ -31,9 +34,29 @@ def sonix(method: str, path: str, **kwargs) -> httpx.Response:
     return response
 
 
+def _signature(actor, media_id: str) -> str:
+    message = f"voice:{actor.id}:{media_id}".encode()
+    return hmac.new(settings.jwt_secret.encode(), message, hashlib.sha256).hexdigest()[
+        :32
+    ]
+
+
+def _owned_media(actor, transcription_id: str) -> str:
+    """The Sonix media id, only for the person who uploaded the recording."""
+    media_id, _, signature = transcription_id.rpartition(".")
+    if not media_id or not hmac.compare_digest(signature, _signature(actor, media_id)):
+        raise HTTPException(404, "Recording not found")
+    return media_id
+
+
 @router.post("/transcriptions", status_code=201)
-async def create(file: UploadFile, actor: Actor, language: str = "en"):
-    audio = await file.read()
+async def create(
+    file: UploadFile,
+    actor: Actor,
+    language: str = Query(default="en", pattern=r"^[a-z]{2}(-[A-Za-z]{2})?$"),
+):
+    # Read one byte past the limit rather than the whole upload.
+    audio = await file.read(MAX_UPLOAD_BYTES + 1)
     if not audio:
         raise HTTPException(422, "The recording is empty")
     if len(audio) > MAX_UPLOAD_BYTES:
@@ -44,14 +67,22 @@ async def create(file: UploadFile, actor: Actor, language: str = "en"):
         data={"language": language, "name": f"Voice note by {actor.email}"},
         files={"file": (file.filename or "voice.webm", audio, file.content_type)},
     ).json()
-    return {"id": media["id"], "status": media.get("status", "preparing")}
+    # Sonix ids are shared across the account; the signed id ties this one to its uploader.
+    media_id = str(media["id"])
+    return {
+        "id": f"{media_id}.{_signature(actor, media_id)}",
+        "status": media.get("status", "preparing"),
+    }
 
 
-@router.get("/transcriptions/{media_id}")
-def show(media_id: str, actor: Actor):
-    media = sonix("GET", f"/media/{media_id}").json()
+@router.get("/transcriptions/{transcription_id}")
+def show(transcription_id: str, actor: Actor):
+    media_id = _owned_media(actor, transcription_id)
+    media = sonix("GET", f"/media/{quote(media_id, safe='')}").json()
     status = media.get("status", "preparing")
     transcript = None
     if status == "completed":
-        transcript = sonix("GET", f"/media/{media_id}/transcript").text.strip()
-    return {"id": media_id, "status": status, "transcript": transcript}
+        transcript = sonix(
+            "GET", f"/media/{quote(media_id, safe='')}/transcript"
+        ).text.strip()
+    return {"id": transcription_id, "status": status, "transcript": transcript}
