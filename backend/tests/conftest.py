@@ -60,7 +60,8 @@ def auth(client):
         )
         db.commit()
     response = client.post(
-        "/api/auth/login", json={"email": "alex@example.com", "password": "Password123!"}
+        "/api/auth/login",
+        json={"email": "alex@example.com", "password": "Password123!"},
     )
     return {"Authorization": "Bearer " + response.json()["access_token"]}
 

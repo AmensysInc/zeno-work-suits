@@ -19,7 +19,14 @@ from app.services.activity import record
 def delete(db, actor, id):
     item = child_access(db, TestCase, id, actor)
     require_lead(db, actor, db.get(Project, item.project_id))
-    record(db, actor, item.project_id, item.issue_id, "deleted test case", new=item.test_case_key)
+    record(
+        db,
+        actor,
+        item.project_id,
+        item.issue_id,
+        "deleted test case",
+        new=item.test_case_key,
+    )
     db.delete(item)
     db.commit()
 

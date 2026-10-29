@@ -8,7 +8,9 @@ from app.services.mailer import send_login_details
 
 
 def list_users(db):
-    return db.scalars(select(User).order_by(User.is_active.desc(), User.first_name, User.last_name)).all()
+    return db.scalars(
+        select(User).order_by(User.is_active.desc(), User.first_name, User.last_name)
+    ).all()
 
 
 def create_user(db, data):
@@ -43,7 +45,9 @@ def update_user(db, user_id, data, admin):
     changes = data.model_dump(exclude_unset=True)
     demoted = changes.get("role") not in (None, "ADMIN")
     if user.id == admin.id and (demoted or changes.get("is_active") is False):
-        raise HTTPException(400, "You can't remove your own admin access or disable your own account")
+        raise HTTPException(
+            400, "You can't remove your own admin access or disable your own account"
+        )
     if demoted or changes.get("is_active") is False:
         # Never leave the application without an active administrator.
         others = db.scalar(

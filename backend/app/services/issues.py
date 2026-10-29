@@ -109,7 +109,9 @@ def edit(db, id, data, actor):
     issue = issue_access(db, id, actor)
     project = project_access(db, issue.project_id, actor, lock=True)
     db.refresh(issue)
-    notifications = apply(db, project, issue, data.model_dump(exclude_unset=True), actor)
+    notifications = apply(
+        db, project, issue, data.model_dump(exclude_unset=True), actor
+    )
     db.commit()
     _notify(notifications)
     return issue

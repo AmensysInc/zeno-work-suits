@@ -8,7 +8,8 @@ def owned(db, id, actor, moderate=False):
     """The person's own comment; with moderate, a lead may also take others'."""
     comment = child_access(db, Comment, id, actor)
     if comment.user_id != actor.id and not (
-        moderate and can_lead(db, actor, issue_access(db, comment.issue_id, actor).project)
+        moderate
+        and can_lead(db, actor, issue_access(db, comment.issue_id, actor).project)
     ):
         raise HTTPException(403, "You can only edit or delete your own comments")
     return comment

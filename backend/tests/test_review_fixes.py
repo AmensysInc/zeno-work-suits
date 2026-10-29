@@ -77,8 +77,14 @@ def test_leads_run_sprints_and_delete_work(client, auth):
     url = f"/api/projects/{p['id']}/sprints"
     assert client.post(url, headers=dev, json=sprint_body).status_code == 403
     sprint = client.post(url, headers=lead, json=sprint_body).json()
-    assert client.post(f"/api/sprints/{sprint['id']}/start", headers=dev).status_code == 403
-    assert client.post(f"/api/sprints/{sprint['id']}/start", headers=lead).status_code == 200
+    assert (
+        client.post(f"/api/sprints/{sprint['id']}/start", headers=dev).status_code
+        == 403
+    )
+    assert (
+        client.post(f"/api/sprints/{sprint['id']}/start", headers=lead).status_code
+        == 200
+    )
 
     story = issue(client, dev, p["id"], issue_type="STORY")
     assert client.delete(f"/api/issues/{story['id']}", headers=dev).status_code == 403
@@ -105,12 +111,17 @@ def test_test_results_come_from_runs(client, auth):
             "issue_id": story["id"],
             "title": "Login",
             "status": "PASSED",
-            "steps": [{"step_number": 1, "action": "Sign in", "expected_result": "Home"}],
+            "steps": [
+                {"step_number": 1, "action": "Sign in", "expected_result": "Home"}
+            ],
         },
     ).json()
     assert created["status"] == "NOT_RUN"
     override = f"/api/test-cases/{created['id']}/status"
-    assert client.patch(override, headers=dev, json={"status": "PASSED"}).status_code == 403
+    assert (
+        client.patch(override, headers=dev, json={"status": "PASSED"}).status_code
+        == 403
+    )
 
     run = client.post(
         "/api/test-executions",
@@ -118,10 +129,22 @@ def test_test_results_come_from_runs(client, auth):
         json={"test_case_id": created["id"], "status": "FAILED"},
     ).json()
     # Run history is removed only by its tester or a lead.
-    assert client.delete(f"/api/test-executions/{run['id']}", headers=dev).status_code == 403
-    assert client.delete(f"/api/test-executions/{run['id']}", headers=tester).status_code == 204
-    assert client.delete(f"/api/test-cases/{created['id']}", headers=dev).status_code == 403
-    assert client.delete(f"/api/test-cases/{created['id']}", headers=auth).status_code == 204
+    assert (
+        client.delete(f"/api/test-executions/{run['id']}", headers=dev).status_code
+        == 403
+    )
+    assert (
+        client.delete(f"/api/test-executions/{run['id']}", headers=tester).status_code
+        == 204
+    )
+    assert (
+        client.delete(f"/api/test-cases/{created['id']}", headers=dev).status_code
+        == 403
+    )
+    assert (
+        client.delete(f"/api/test-cases/{created['id']}", headers=auth).status_code
+        == 204
+    )
 
 
 def test_temporary_password_must_be_replaced_first(client, auth):
@@ -175,7 +198,8 @@ def test_repeated_failed_sign_ins_are_throttled(client, auth):
     for _ in range(5):
         assert client.post("/api/auth/login", json=wrong).status_code == 401
     locked = client.post(
-        "/api/auth/login", json={"email": "alex@example.com", "password": "Password123!"}
+        "/api/auth/login",
+        json={"email": "alex@example.com", "password": "Password123!"},
     )
     assert locked.status_code == 429
     assert "Try again in 15 minutes" in locked.json()["detail"]
@@ -203,7 +227,9 @@ def test_voice_transcripts_belong_to_their_uploader(client, auth, monkeypatch):
     assert client.get(url, headers=auth).json()["transcript"] == "Hello team"
     assert client.get(url, headers=other).status_code == 404
     # The raw Sonix id is not enough on its own.
-    assert client.get("/api/voice/transcriptions/abc123", headers=auth).status_code == 404
+    assert (
+        client.get("/api/voice/transcriptions/abc123", headers=auth).status_code == 404
+    )
 
 
 def test_automation_rules_run_on_status_change(client, auth, monkeypatch):
@@ -230,7 +256,9 @@ def test_automation_rules_run_on_status_change(client, auth, monkeypatch):
         assert rule.status_code == 201, rule.text
     story = issue(client, auth, p["id"], issue_type="STORY", assignee_id=dev_id)
     client.patch(
-        f"/api/issues/{story['id']}/status", headers=auth, json={"status": "IN_PROGRESS"}
+        f"/api/issues/{story['id']}/status",
+        headers=auth,
+        json={"status": "IN_PROGRESS"},
     )
     assert sent == []
     client.patch(
@@ -261,14 +289,22 @@ def test_leads_can_remove_others_comments(client, auth):
 
 
 def test_managers_cannot_take_another_teams_repository(client, auth, monkeypatch):
-    repo = {"html_url": "https://github.com/acme/hr-portal", "full_name": "acme/hr-portal"}
+    repo = {
+        "html_url": "https://github.com/acme/hr-portal",
+        "full_name": "acme/hr-portal",
+    }
     monkeypatch.setattr(settings, "github_token", "test-token")
     monkeypatch.setattr(github, "call", lambda method, path, **kwargs: repo)
     theirs = project(client, auth, "THEIRS")
     url = f"/api/github/projects/{theirs['id']}/repository"
-    assert client.put(url, headers=auth, json={"full_name": "acme/hr-portal"}).status_code == 200
+    assert (
+        client.put(url, headers=auth, json={"full_name": "acme/hr-portal"}).status_code
+        == 200
+    )
 
-    manager = create_user(client, auth, "Max", "Manager", "max@example.com", role="MANAGER")
+    manager = create_user(
+        client, auth, "Max", "Manager", "max@example.com", role="MANAGER"
+    )
     mine = project(client, manager, "MINE")
     url = f"/api/github/projects/{mine['id']}/repository"
     taken = client.put(url, headers=manager, json={"full_name": "acme/hr-portal"})
@@ -281,6 +317,8 @@ def test_managers_cannot_take_another_teams_repository(client, auth, monkeypatch
 def test_issue_list_reports_when_work_was_done(client, auth):
     p = project(client, auth)
     story = issue(client, auth, p["id"], issue_type="STORY")
-    client.patch(f"/api/issues/{story['id']}/status", headers=auth, json={"status": "DONE"})
+    client.patch(
+        f"/api/issues/{story['id']}/status", headers=auth, json={"status": "DONE"}
+    )
     [listed] = client.get(f"/api/issues?project_id={p['id']}", headers=auth).json()
     assert listed["resolved_at"] is not None

@@ -133,10 +133,16 @@ export default function AiGeneratorPage() {
     setPicked(next);
   };
   const selectPull = (selected: GitHubPull) =>
-    pick(pull?.number === selected.number ? null : { kind: 'pull', pull: selected });
+    pick(
+      pull?.number === selected.number
+        ? null
+        : { kind: 'pull', pull: selected },
+    );
   const selectCommit = (selected: GitHubCommit) =>
     pick(
-      commit?.sha === selected.sha ? null : { kind: 'commit', commit: selected },
+      commit?.sha === selected.sha
+        ? null
+        : { kind: 'commit', commit: selected },
     );
   // One dropdown carries modules, pull requests, branches and a picked
   // commit; the prefix says which.

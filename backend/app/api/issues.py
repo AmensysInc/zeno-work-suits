@@ -34,17 +34,21 @@ def index(
     items = db.scalars(query.order_by(Issue.order_index, Issue.id)).all()
     # When each finished issue was last moved to Done, as the reports count it.
     done_ids = [i.id for i in items if i.status == "DONE"]
-    resolved = dict(
-        db.execute(
-            select(ActivityLog.issue_id, func.max(ActivityLog.created_at))
-            .where(
-                ActivityLog.issue_id.in_(done_ids),
-                ActivityLog.field_name == "status",
-                ActivityLog.new_value == "DONE",
-            )
-            .group_by(ActivityLog.issue_id)
-        ).all()
-    ) if done_ids else {}
+    resolved = (
+        dict(
+            db.execute(
+                select(ActivityLog.issue_id, func.max(ActivityLog.created_at))
+                .where(
+                    ActivityLog.issue_id.in_(done_ids),
+                    ActivityLog.field_name == "status",
+                    ActivityLog.new_value == "DONE",
+                )
+                .group_by(ActivityLog.issue_id)
+            ).all()
+        )
+        if done_ids
+        else {}
+    )
     for item in items:
         item.resolved_at = (
             resolved.get(item.id, item.updated_at) if item.status == "DONE" else None

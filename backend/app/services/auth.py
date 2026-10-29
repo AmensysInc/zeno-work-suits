@@ -12,7 +12,9 @@ from app.core.security import hash_password, verify_password, create_token
 
 def temporary_password() -> str:
     """12 characters, easy to read aloud (no 0/O/1/l/I)."""
-    alphabet = "".join(c for c in string.ascii_letters + string.digits if c not in "0O1lI")
+    alphabet = "".join(
+        c for c in string.ascii_letters + string.digits if c not in "0O1lI"
+    )
     return "".join(secrets.choice(alphabet) for _ in range(12))
 
 
@@ -62,7 +64,9 @@ def login(db, data, address=""):
             _fail(key)
         raise HTTPException(401, "Incorrect email or password")
     if not user.is_active:
-        raise HTTPException(403, "Your account is disabled. Contact your administrator.")
+        raise HTTPException(
+            403, "Your account is disabled. Contact your administrator."
+        )
     with _failures_lock:
         _failures.pop(keys[0], None)
     user.last_login_at = now()

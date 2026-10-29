@@ -32,7 +32,8 @@ api.interceptors.response.use(
     // Still on an admin-issued temporary password: the server allows nothing else.
     if (
       error.response?.status === 403 &&
-      error.response.data?.detail === 'Choose a new password before continuing' &&
+      error.response.data?.detail ===
+        'Choose a new password before continuing' &&
       window.location.pathname !== '/change-password'
     ) {
       window.location.assign('/change-password');

@@ -17,9 +17,7 @@ def owned(db, id, actor, moderate=False):
     if not message:
         raise HTTPException(404, "Message not found")
     project = project_access(db, message.project_id, actor)
-    if message.user_id != actor.id and not (
-        moderate and can_lead(db, actor, project)
-    ):
+    if message.user_id != actor.id and not (moderate and can_lead(db, actor, project)):
         raise HTTPException(403, "You can only edit or delete your own messages")
     return message
 

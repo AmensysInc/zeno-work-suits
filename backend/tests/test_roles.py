@@ -17,7 +17,10 @@ def test_admin_adds_people_with_a_role(client, auth):
     assert "password_hash" not in added.json()["user"]
     login = client.post(
         "/api/auth/login",
-        json={"email": "priya@example.com", "password": added.json()["temporary_password"]},
+        json={
+            "email": "priya@example.com",
+            "password": added.json()["temporary_password"],
+        },
     )
     assert login.status_code == 200
     assert (
@@ -29,7 +32,9 @@ def test_admin_adds_people_with_a_role(client, auth):
     # Managers run projects but do not manage accounts.
     manager = {"Authorization": "Bearer " + login.json()["access_token"]}
     other = {**person, "email": "other@example.com"}
-    assert client.post("/api/admin/users", headers=manager, json=other).status_code == 403
+    assert (
+        client.post("/api/admin/users", headers=manager, json=other).status_code == 403
+    )
 
 
 def test_roles_and_admin_access(client, auth):

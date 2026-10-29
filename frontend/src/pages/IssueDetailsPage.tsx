@@ -71,41 +71,41 @@ export default function IssueDetailsPage() {
             Edit issue
           </Button>
           {canLead && (
-          <Button
-            variant="destructive"
-            icon={<DeleteOutlined />}
-            onClick={async () => {
-              const subtasks =
-                all.data?.filter((i) => i.parent_issue_id === issue.id)
-                  .length ?? 0;
-              const runs = (tests.data ?? []).reduce(
-                (n, t) => n + t.execution_count,
-                0,
-              );
-              const lost = [
-                subtasks && `${subtasks} subtask${subtasks === 1 ? '' : 's'}`,
-                tests.data?.length &&
-                  `${tests.data.length} test case${tests.data.length === 1 ? '' : 's'} with ${runs} recorded run${runs === 1 ? '' : 's'}`,
-              ].filter(Boolean);
-              if (
-                await confirm(
-                  `Delete ${issue.issue_key} with its criteria and comments${
-                    lost.length ? `, ${lost.join(' and ')}` : ''
-                  }? This cannot be undone.`,
-                  { okText: 'Delete' },
-                )
-              ) {
-                try {
-                  await del.mutateAsync({});
-                  nav(`/projects/${issue.project_id}/backlog`);
-                } catch {
-                  /*toast*/
+            <Button
+              variant="destructive"
+              icon={<DeleteOutlined />}
+              onClick={async () => {
+                const subtasks =
+                  all.data?.filter((i) => i.parent_issue_id === issue.id)
+                    .length ?? 0;
+                const runs = (tests.data ?? []).reduce(
+                  (n, t) => n + t.execution_count,
+                  0,
+                );
+                const lost = [
+                  subtasks && `${subtasks} subtask${subtasks === 1 ? '' : 's'}`,
+                  tests.data?.length &&
+                    `${tests.data.length} test case${tests.data.length === 1 ? '' : 's'} with ${runs} recorded run${runs === 1 ? '' : 's'}`,
+                ].filter(Boolean);
+                if (
+                  await confirm(
+                    `Delete ${issue.issue_key} with its criteria and comments${
+                      lost.length ? `, ${lost.join(' and ')}` : ''
+                    }? This cannot be undone.`,
+                    { okText: 'Delete' },
+                  )
+                ) {
+                  try {
+                    await del.mutateAsync({});
+                    nav(`/projects/${issue.project_id}/backlog`);
+                  } catch {
+                    /*toast*/
+                  }
                 }
-              }
-            }}
-          >
-            Delete
-          </Button>
+              }}
+            >
+              Delete
+            </Button>
           )}
         </div>
       </div>

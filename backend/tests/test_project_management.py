@@ -118,7 +118,9 @@ def test_bulk_update_is_atomic_and_isolated(client, auth):
         json={"ids": [b["id"], epic["id"]], "changes": {"sprint_id": s["id"]}},
     )
     assert rollback.status_code == 422
-    assert client.get(f"/api/issues/{b['id']}", headers=auth).json()["sprint_id"] is None
+    assert (
+        client.get(f"/api/issues/{b['id']}", headers=auth).json()["sprint_id"] is None
+    )
     # Another user's issues cannot be touched through a batch.
     other = create_user(client, auth, "Sam", "Patel", "sam@example.com")
     stranger = client.patch(
@@ -199,7 +201,10 @@ def test_delete_sprint_and_carry_over(client, auth):
     assert client.delete(f"/api/sprints/{s3['id']}", headers=auth).status_code == 204
     left = client.get(f"/api/issues/{planned['id']}", headers=auth).json()
     assert left["sprint_id"] is None and left["status"] == "BACKLOG"
-    ids = [x["id"] for x in client.get(f"/api/projects/{p['id']}/sprints", headers=auth).json()]
+    ids = [
+        x["id"]
+        for x in client.get(f"/api/projects/{p['id']}/sprints", headers=auth).json()
+    ]
     assert s3["id"] not in ids
     other = create_user(client, auth, "Sam", "Patel", "sam@example.com")
     assert client.delete(f"/api/sprints/{s2['id']}", headers=other).status_code == 404
@@ -244,6 +249,5 @@ def test_reports(client, auth):
     assert owner["open_issues"] == 2
     other = create_user(client, auth, "Sam", "Patel", "sam@example.com")
     assert (
-        client.get(f"/api/projects/{p['id']}/reports", headers=other).status_code
-        == 404
+        client.get(f"/api/projects/{p['id']}/reports", headers=other).status_code == 404
     )

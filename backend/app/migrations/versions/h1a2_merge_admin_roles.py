@@ -17,6 +17,7 @@ def upgrade():
 
 def downgrade():
     op.add_column(
-        "users", sa.Column("is_admin", sa.Boolean(), nullable=False, server_default=sa.false())
+        "users",
+        sa.Column("is_admin", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
     op.execute("UPDATE users SET is_admin = true WHERE role = 'ADMIN'")

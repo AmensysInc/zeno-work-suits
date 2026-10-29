@@ -144,7 +144,8 @@ def link(db, project_id, full_name, actor):
         )
     if full_name.lower() in _taken(db, actor):
         raise HTTPException(
-            403, "This repository belongs to another team's project; ask an admin to link it"
+            403,
+            "This repository belongs to another team's project; ask an admin to link it",
         )
     repo = call("GET", f"/repos/{full_name}")
     project.github_repo = repo["html_url"]

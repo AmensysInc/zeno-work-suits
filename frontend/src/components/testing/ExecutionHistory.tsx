@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Card, Table, Tag, Typography } from 'antd';
 import { BugOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useCanLead, useData, useIssues, useMe, useSave } from '../../hooks/data';
+import {
+  useCanLead,
+  useData,
+  useIssues,
+  useMe,
+  useSave,
+} from '../../hooks/data';
 import type { Execution, Sprint, TestCase } from '../../types';
 import { bugFromRun, fullName } from '../../lib/qa';
 import { Badge, State } from '../ui/shared';

@@ -85,7 +85,8 @@ export default function AppShell() {
       pageProject;
   // A temporary password from an admin must be replaced before using the app.
   useEffect(() => {
-    if (me.data?.must_change_password) nav('/change-password', { replace: true });
+    if (me.data?.must_change_password)
+      nav('/change-password', { replace: true });
   }, [me.data?.must_change_password, nav]);
   useEffect(() => {
     if (!fromUrl) return;

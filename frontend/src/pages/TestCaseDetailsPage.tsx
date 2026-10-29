@@ -59,27 +59,27 @@ export default function TestCaseDetailsPage() {
           {editing ? 'Close editor' : 'Edit'}
         </Button>
         {canLead && (
-        <Button
-          variant="destructive"
-          icon={<DeleteOutlined />}
-          onClick={async () => {
-            if (
-              !(await confirm(
-                'Delete this test case, its steps and its run history?',
-                { okText: 'Delete' },
-              ))
-            )
-              return;
-            try {
-              await del.mutateAsync({});
-              nav(`/projects/${tc.project_id}/test-cases`);
-            } catch {
-              /*toast*/
-            }
-          }}
-        >
-          Delete
-        </Button>
+          <Button
+            variant="destructive"
+            icon={<DeleteOutlined />}
+            onClick={async () => {
+              if (
+                !(await confirm(
+                  'Delete this test case, its steps and its run history?',
+                  { okText: 'Delete' },
+                ))
+              )
+                return;
+              try {
+                await del.mutateAsync({});
+                nav(`/projects/${tc.project_id}/test-cases`);
+              } catch {
+                /*toast*/
+              }
+            }}
+          >
+            Delete
+          </Button>
         )}
       </PageHeader>
       {editing ? (

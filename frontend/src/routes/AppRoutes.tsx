@@ -38,7 +38,11 @@ function RequireAuth() {
 }
 // Signed in but outside the app shell (first-login password change).
 function RequireToken({ children }: { children: React.ReactNode }) {
-  return localStorage.getItem('trackly_token') ? <>{children}</> : <Navigate to="/login" replace />;
+  return localStorage.getItem('trackly_token') ? (
+    <>{children}</>
+  ) : (
+    <Navigate to="/login" replace />
+  );
 }
 export default function AppRoutes() {
   return (
@@ -111,7 +115,10 @@ export default function AppRoutes() {
             element={<TestCaseDetailsPage />}
           />
           <Route path="/my-issues" element={<MyIssuesPage />} />
-          <Route path="/people" element={<Navigate to="/admin/users" replace />} />
+          <Route
+            path="/people"
+            element={<Navigate to="/admin/users" replace />}
+          />
           <Route path="/github" element={<GitHubPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/automations" element={<AutomationsPage />} />

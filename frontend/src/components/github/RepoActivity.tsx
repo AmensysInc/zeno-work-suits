@@ -85,7 +85,10 @@ function Pulls({
         {pulls.data?.map((p) => (
           <li
             key={p.number}
-            {...selectable(onSelect && (() => onSelect(p)), selected === p.number)}
+            {...selectable(
+              onSelect && (() => onSelect(p)),
+              selected === p.number,
+            )}
           >
             <div className="repo-pull-title">
               {selected === p.number && <CheckCircleFilled />}

@@ -63,14 +63,30 @@ def run(db, actor, project, issue):
                 },
                 actor,
             )
-            record(db, actor, project.id, issue.id, f"automation “{rule.name}” created bug", new=bug.issue_key)
+            record(
+                db,
+                actor,
+                project.id,
+                issue.id,
+                f"automation “{rule.name}” created bug",
+                new=bug.issue_key,
+            )
             continue
         # By id: the same edit may have just changed the assignee.
-        person_id = issue.assignee_id if rule.action == "NOTIFY_ASSIGNEE" else issue.reporter_id
+        person_id = (
+            issue.assignee_id if rule.action == "NOTIFY_ASSIGNEE" else issue.reporter_id
+        )
         person = db.get(User, person_id) if person_id else None
         if not person or not person.is_active:
             continue
-        record(db, actor, project.id, issue.id, f"automation “{rule.name}” notified", new=person.email)
+        record(
+            db,
+            actor,
+            project.id,
+            issue.id,
+            f"automation “{rule.name}” notified",
+            new=person.email,
+        )
         message = f"{issue.issue_key} moved to {issue.status.replace('_', ' ').title()}"
         notifications.append(partial(send_issue_update, person, issue, message))
     return notifications

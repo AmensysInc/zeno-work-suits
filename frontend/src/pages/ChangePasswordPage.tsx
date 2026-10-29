@@ -48,7 +48,10 @@ export default function ChangePasswordPage() {
           onSubmit={handleSubmit(async ({ current_password, new_password }) => {
             setError('');
             try {
-              const r = await api.post('/auth/change-password', { current_password, new_password });
+              const r = await api.post('/auth/change-password', {
+                current_password,
+                new_password,
+              });
               // A new password signs out older tokens, including this one.
               localStorage.setItem('trackly_token', r.data.access_token);
               await qc.invalidateQueries();
@@ -60,13 +63,25 @@ export default function ChangePasswordPage() {
           })}
         >
           <Field label={forced ? 'Temporary password' : 'Current password'}>
-            <input type="password" autoComplete="current-password" {...register('current_password')} />
+            <input
+              type="password"
+              autoComplete="current-password"
+              {...register('current_password')}
+            />
           </Field>
           <Field label="New password">
-            <input type="password" autoComplete="new-password" {...register('new_password')} />
+            <input
+              type="password"
+              autoComplete="new-password"
+              {...register('new_password')}
+            />
           </Field>
           <Field label="Confirm new password">
-            <input type="password" autoComplete="new-password" {...register('confirm')} />
+            <input
+              type="password"
+              autoComplete="new-password"
+              {...register('confirm')}
+            />
           </Field>
           {Object.values(errors).map((e, i) => (
             <p className="error" key={i}>

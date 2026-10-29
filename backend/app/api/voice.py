@@ -36,7 +36,9 @@ def sonix(method: str, path: str, **kwargs) -> httpx.Response:
 
 def _signature(actor, media_id: str) -> str:
     message = f"voice:{actor.id}:{media_id}".encode()
-    return hmac.new(settings.jwt_secret.encode(), message, hashlib.sha256).hexdigest()[:32]
+    return hmac.new(settings.jwt_secret.encode(), message, hashlib.sha256).hexdigest()[
+        :32
+    ]
 
 
 def _owned_media(actor, transcription_id: str) -> str:

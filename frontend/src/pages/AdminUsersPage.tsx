@@ -10,7 +10,13 @@ import { useData, useMe } from '../hooks/data';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
 import { Badge, Field, PageHeader, State } from '../components/ui/shared';
-import { label, roles, type AdminUser, type IssuedLogin, type Role } from '../types';
+import {
+  label,
+  roles,
+  type AdminUser,
+  type IssuedLogin,
+  type Role,
+} from '../types';
 
 const schema = z.object({
   first_name: z.string().trim().min(1, 'First name is required').max(80),
@@ -22,15 +28,26 @@ const schema = z.object({
 type Form = z.infer<typeof schema>;
 
 const when = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Never';
+  iso
+    ? new Date(iso).toLocaleString([], {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : 'Never';
 
 export default function AdminUsersPage() {
   const me = useMe();
   const users = useData<AdminUser[]>('/admin/users', !!me.data?.is_admin);
-  const settings = useData<{ email_configured: boolean }>('/admin/settings', !!me.data?.is_admin);
+  const settings = useData<{ email_configured: boolean }>(
+    '/admin/settings',
+    !!me.data?.is_admin,
+  );
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
-  const [issued, setIssued] = useState<{ login: IssuedLogin; reset: boolean } | null>(null);
+  const [issued, setIssued] = useState<{
+    login: IssuedLogin;
+    reset: boolean;
+  } | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const emailOn = !!settings.data?.email_configured;
 
@@ -46,7 +63,11 @@ export default function AdminUsersPage() {
 
   if (me.data && !me.data.is_admin) return <Navigate to="/dashboard" replace />;
 
-  const act = async (user: AdminUser, run: () => Promise<unknown>, done: string) => {
+  const act = async (
+    user: AdminUser,
+    run: () => Promise<unknown>,
+    done: string,
+  ) => {
     setBusy(user.id);
     try {
       await run();
@@ -63,9 +84,12 @@ export default function AdminUsersPage() {
     act(
       user,
       async () => {
-        const r = await api.post<IssuedLogin>(`/admin/users/${user.id}/reset-password`, {
-          send_email: emailOn,
-        });
+        const r = await api.post<IssuedLogin>(
+          `/admin/users/${user.id}/reset-password`,
+          {
+            send_email: emailOn,
+          },
+        );
         setIssued({ login: r.data, reset: true });
       },
       'Temporary password created',
@@ -85,7 +109,11 @@ export default function AdminUsersPage() {
       </PageHeader>
 
       <div className="card">
-        <State loading={users.isLoading} error={users.error} empty={!users.isLoading && !list.length} />
+        <State
+          loading={users.isLoading}
+          error={users.error}
+          empty={!users.isLoading && !list.length}
+        />
         {!!list.length && (
           <div className="table-wrap">
             <table>
@@ -118,7 +146,13 @@ export default function AdminUsersPage() {
                             aria-label={`Role for ${u.first_name} ${u.last_name}`}
                             value={u.role}
                             disabled={busy === u.id}
-                            onChange={(e) => update(u, { role: e.target.value as Role }, 'Role updated')}
+                            onChange={(e) =>
+                              update(
+                                u,
+                                { role: e.target.value as Role },
+                                'Role updated',
+                              )
+                            }
                           >
                             {roles.map((role) => (
                               <option key={role} value={role}>
@@ -129,14 +163,24 @@ export default function AdminUsersPage() {
                         )}
                       </td>
                       <td>
-                        <span className={`badge ${u.is_active ? 'badge-active' : 'badge-blocked'}`}>
-                          {!u.is_active ? 'Disabled' : u.must_change_password ? 'Invited' : 'Active'}
+                        <span
+                          className={`badge ${u.is_active ? 'badge-active' : 'badge-blocked'}`}
+                        >
+                          {!u.is_active
+                            ? 'Disabled'
+                            : u.must_change_password
+                              ? 'Invited'
+                              : 'Active'}
                         </span>
                       </td>
                       <td className="muted">{when(u.last_login_at)}</td>
                       <td>
                         <div className="actions">
-                          <Button variant="outline" disabled={busy === u.id} onClick={() => resetPassword(u)}>
+                          <Button
+                            variant="outline"
+                            disabled={busy === u.id}
+                            onClick={() => resetPassword(u)}
+                          >
                             Reset password
                           </Button>
                           {!self && (
@@ -144,7 +188,13 @@ export default function AdminUsersPage() {
                               variant={u.is_active ? 'destructive' : 'ghost'}
                               disabled={busy === u.id}
                               onClick={() =>
-                                update(u, { is_active: !u.is_active }, u.is_active ? 'User disabled' : 'User enabled')
+                                update(
+                                  u,
+                                  { is_active: !u.is_active },
+                                  u.is_active
+                                    ? 'User disabled'
+                                    : 'User enabled',
+                                )
                               }
                             >
                               {u.is_active ? 'Disable' : 'Enable'}
@@ -172,7 +222,10 @@ export default function AdminUsersPage() {
         <form
           onSubmit={handleSubmit(async (data) => {
             try {
-              const r = await api.post<IssuedLogin>('/admin/users', { ...data, send_email: emailOn && data.send_email });
+              const r = await api.post<IssuedLogin>('/admin/users', {
+                ...data,
+                send_email: emailOn && data.send_email,
+              });
               await qc.invalidateQueries({ queryKey: ['/admin/users'] });
               setAdding(false);
               reset();
@@ -203,12 +256,17 @@ export default function AdminUsersPage() {
             </select>
           </Field>
           <label className="check">
-            <input type="checkbox" disabled={!emailOn} {...register('send_email')} /> Email the sign-in details to
-            this user
+            <input
+              type="checkbox"
+              disabled={!emailOn}
+              {...register('send_email')}
+            />{' '}
+            Email the sign-in details to this user
           </label>
           {!emailOn && (
             <p className="muted">
-              Email isn’t set up yet, so you’ll copy the sign-in details on the next screen and share them yourself.
+              Email isn’t set up yet, so you’ll copy the sign-in details on the
+              next screen and share them yourself.
             </p>
           )}
           {Object.values(errors).map((e, i) => (
@@ -224,7 +282,11 @@ export default function AdminUsersPage() {
         </form>
       </Modal>
 
-      <Modal open={!!issued} onClose={() => setIssued(null)} title={issued?.reset ? 'New temporary password' : 'User created'}>
+      <Modal
+        open={!!issued}
+        onClose={() => setIssued(null)}
+        title={issued?.reset ? 'New temporary password' : 'User created'}
+      >
         {issued && <Credentials issued={issued.login} />}
       </Modal>
     </>
