@@ -1,4 +1,4 @@
-import type { Execution, Issue, TestCase, TraceStory, User } from '../types';
+import type { Execution, Issue, TestCase, TraceStory, User } from '@/types';
 
 export const fullName = (u?: Pick<User, 'first_name' | 'last_name'> | null) =>
   u ? `${u.first_name} ${u.last_name}` : 'Unassigned';

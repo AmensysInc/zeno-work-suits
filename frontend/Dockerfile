@@ -1,13 +1,23 @@
-FROM node:22-alpine AS build
+FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
+
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# The SPA calls the API on the same origin; nginx below proxies /api to the backend container.
-ENV VITE_API_URL=/api
+# Rewrites are fixed at build time: point /api at the backend container.
+ARG API_ORIGIN=http://backend:8000
+ENV API_ORIGIN=$API_ORIGIN NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM nginx:1.27-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+# Standalone server: only the traced dependencies, no dev tooling.
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=80 HOSTNAME=0.0.0.0
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
 EXPOSE 80
+CMD ["node", "server.js"]

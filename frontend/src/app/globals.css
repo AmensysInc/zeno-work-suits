@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+
+/* Zeno TeamSuite v2 tokens. Light by default; `.dark` on <html> switches theme. */
+:root {
+  --app: #f5f5f7;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --subtle: #fafafb;
+  --hover: #f0f0f3;
+  --sel: #eef0ff;
+  --line: #e6e6eb;
+  --line-2: #d9d9e0;
+  --ink: #111218;
+  --ink-2: #575b66;
+  --ink-3: #8a8e99;
+  --ink-4: #b4b7c0;
+  --accent: #4f46e5;
+  --accent-2: #4338ca;
+  --accent-soft: #eef0ff;
+  --accent-ink: #4338ca;
+  --ring: rgba(79, 70, 229, 0.16);
+  --overlay: rgba(17, 18, 24, 0.32);
+  --shadow-sm: 0 1px 2px rgba(16, 17, 24, 0.05);
+  --shadow-md: 0 1px 2px rgba(16, 17, 24, 0.04), 0 2px 8px rgba(16, 17, 24, 0.04);
+  --shadow-lg: 0 24px 64px rgba(16, 17, 24, 0.22), 0 2px 6px rgba(16, 17, 24, 0.06);
+  color-scheme: light;
+}
+.dark {
+  --app: #0d0e12;
+  --surface: #131419;
+  --raised: #1a1b22;
+  --subtle: #16171d;
+  --hover: #1e2028;
+  --sel: #20223a;
+  --line: #24262f;
+  --line-2: #2e3039;
+  --ink: #ecedf1;
+  --ink-2: #a3a6b1;
+  --ink-3: #6e7280;
+  --ink-4: #4a4d58;
+  --accent: #6e67f2;
+  --accent-2: #8580ff;
+  --accent-soft: #22224a;
+  --accent-ink: #a9a5ff;
+  --ring: rgba(110, 103, 242, 0.28);
+  --overlay: rgba(0, 0, 0, 0.55);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-app: var(--app);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-subtle: var(--subtle);
+  --color-hover: var(--hover);
+  --color-sel: var(--sel);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    background: var(--app);
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv11';
+  }
+  * {
+    border-color: var(--line);
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@utility tnum {
+  font-feature-settings: 'tnum';
+}
+@utility caps {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
