@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Card, Empty, Segmented, Tag, Typography } from 'antd';
 import {
@@ -24,6 +24,24 @@ type Tab = 'pulls' | 'branches' | 'commits';
 
 const date = (value: string) =>
   value ? new Date(value).toLocaleDateString() : '';
+
+/** A list row that acts as a toggle button when the list is selectable. */
+function selectable(onSelect: (() => void) | undefined, selected: boolean) {
+  if (!onSelect) return {};
+  return {
+    className: `selectable ${selected ? 'selected' : ''}`,
+    role: 'button',
+    tabIndex: 0,
+    'aria-pressed': selected,
+    onClick: onSelect,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelect();
+      }
+    },
+  };
+}
 
 function Pulls({
   projectId,
@@ -60,27 +78,14 @@ function Pulls({
       )}
       {onSelect && !!pulls.data?.length && (
         <Typography.Text type="secondary" className="repo-hint">
-          Select a pull request to generate from the module it changes.
+          Select a pull request to generate from the code it changes.
         </Typography.Text>
       )}
       <ul className="repo-list">
         {pulls.data?.map((p) => (
           <li
             key={p.number}
-            className={`${onSelect ? 'selectable' : ''} ${selected === p.number ? 'selected' : ''}`}
-            role={onSelect ? 'button' : undefined}
-            tabIndex={onSelect ? 0 : undefined}
-            aria-pressed={onSelect ? selected === p.number : undefined}
-            onClick={onSelect && (() => onSelect(p))}
-            onKeyDown={
-              onSelect &&
-              ((e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelect(p);
-                }
-              })
-            }
+            {...selectable(onSelect && (() => onSelect(p)), selected === p.number)}
           >
             <div className="repo-pull-title">
               {selected === p.number && <CheckCircleFilled />}
@@ -150,9 +155,13 @@ function Branches({ repo }: { repo?: GitHubBranches }) {
 function Commits({
   projectId,
   repo,
+  selected,
+  onSelect,
 }: {
   projectId: number;
   repo?: GitHubBranches;
+  selected?: string;
+  onSelect?: (commit: GitHubCommit) => void;
 }) {
   const [branch, setBranch] = useState('');
   const current = branch || repo?.default_branch || '';
@@ -180,12 +189,38 @@ function Commits({
           description="No commits on this branch."
         />
       )}
+      {onSelect && !!commits.data?.length && (
+        <Typography.Text type="secondary" className="repo-hint">
+          Select a commit to generate from the code it changes.
+        </Typography.Text>
+      )}
       <ul className="repo-list">
         {commits.data?.map((c) => (
-          <li key={c.sha}>
-            <a href={c.html_url} target="_blank" rel="noreferrer">
-              {c.message}
-            </a>
+          <li
+            key={c.sha}
+            {...selectable(onSelect && (() => onSelect(c)), selected === c.sha)}
+          >
+            {onSelect ? (
+              <div className="repo-pull-title">
+                {selected === c.sha && <CheckCircleFilled />}
+                <span>{c.message}</span>
+                <a
+                  href={c.html_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open commit ${c.sha.slice(0, 7)} on GitHub`}
+                  title="Open on GitHub"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <ExportOutlined />
+                </a>
+              </div>
+            ) : (
+              <a href={c.html_url} target="_blank" rel="noreferrer">
+                {c.message}
+              </a>
+            )}
             <div className="repo-meta">
               <Typography.Text code>{c.sha.slice(0, 7)}</Typography.Text>
               <span>
@@ -205,11 +240,15 @@ export default function RepoActivity({
   configured,
   selectedPull,
   onSelectPull,
+  selectedCommit,
+  onSelectCommit,
 }: {
   project?: Project;
   configured?: boolean;
   selectedPull?: number;
   onSelectPull?: (pull: GitHubPull) => void;
+  selectedCommit?: string;
+  onSelectCommit?: (commit: GitHubCommit) => void;
 }) {
   const [tab, setTab] = useState<Tab>('pulls');
   const name = repoName(project?.github_repo ?? '');
@@ -264,7 +303,12 @@ export default function RepoActivity({
           )}
           {tab === 'branches' && <Branches repo={repo.data} />}
           {tab === 'commits' && (
-            <Commits projectId={project!.id} repo={repo.data} />
+            <Commits
+              projectId={project!.id}
+              repo={repo.data}
+              selected={selectedCommit}
+              onSelect={onSelectCommit}
+            />
           )}
         </>
       )}

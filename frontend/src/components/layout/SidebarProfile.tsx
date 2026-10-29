@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Popover, Space, Typography } from 'antd';
 import { KeyOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useMe } from '../../hooks/data';
+import { clearSession } from '../../services/api';
 import { label } from '../../types';
 import { Badge } from '../ui/shared';
 
@@ -40,7 +41,7 @@ export default function SidebarProfile({ collapsed }: { collapsed: boolean }) {
                 block
                 icon={<LogoutOutlined />}
                 onClick={() => {
-                  localStorage.removeItem('trackly_token');
+                  clearSession();
                   qc.clear();
                   nav('/login');
                 }}

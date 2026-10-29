@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Tabs } from 'antd';
 import { useProjects } from '../hooks/data';
@@ -13,7 +14,17 @@ export default function TestCasesPage() {
   const nav = useNavigate();
   // Inside a project the route owns the project; the global page uses ?project=.
   const routeProject = Number(useParams().projectId) || undefined;
-  const projectId = routeProject ?? (Number(params.get('project')) || current);
+  const projectId =
+    routeProject ??
+    (Number(params.get('project')) || current || projects.data?.[0]?.id);
+  // Put a fallback project in the URL so the top-bar switcher shows it too.
+  useEffect(() => {
+    if (!routeProject && projectId && !params.get('project')) {
+      const next = new URLSearchParams(params);
+      next.set('project', String(projectId));
+      setParams(next, { replace: true });
+    }
+  }, [params, projectId, routeProject, setParams]);
   const tab = params.get('tab') === 'steps' ? 'steps' : 'tests';
   const set = (key: string, value: string) => {
     if (routeProject && key === 'project') {

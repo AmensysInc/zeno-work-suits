@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Alert, Avatar, Button, Form, Input, Progress, Typography } from 'antd';
 import {
   ArrowRightOutlined,
@@ -10,7 +11,7 @@ import {
   ProjectOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
-import { api, errorMessage } from '../services/api';
+import { api, clearSession, errorMessage } from '../services/api';
 interface Credentials {
   email: string;
   password: string;
@@ -74,11 +75,15 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const nav = useNavigate();
+  const qc = useQueryClient();
   const submit = async (data: Credentials) => {
     setError('');
     setSubmitting(true);
     try {
       const r = await api.post('/auth/login', data);
+      // Start clean: no project or cached data left by the previous session.
+      clearSession();
+      qc.clear();
       localStorage.setItem('trackly_token', r.data.access_token);
       const me = await api.get('/auth/me');
       nav(me.data.must_change_password ? '/change-password' : '/dashboard');

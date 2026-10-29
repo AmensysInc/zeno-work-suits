@@ -115,10 +115,14 @@ export const generatorCoverage = [
   'VALIDATION',
 ] as const;
 export type GeneratorCoverage = (typeof generatorCoverage)[number];
+/** A folder of the default branch, or what a branch, pull request or commit changed. */
+export type GeneratorSourceKind = 'DEFAULT' | 'BRANCH' | 'PULL' | 'COMMIT';
 export interface AiSource {
   repository: string;
   module_path: string;
   source_commit: string;
+  source_kind?: GeneratorSourceKind;
+  source_ref?: string;
   generator?: string;
 }
 export interface GeneratorModule {
@@ -138,6 +142,8 @@ export interface GeneratedTestCase {
   test_data: string;
   expected_result: string;
   steps: GeneratedStep[];
+  /** Indexes of the story's acceptance criteria this test proves. */
+  criteria: number[];
 }
 export interface GeneratedStory {
   title: string;
@@ -152,6 +158,8 @@ export interface GeneratedDraft {
   repository: string;
   module_path: string;
   source_commit: string;
+  source_kind: GeneratorSourceKind;
+  source_ref: string;
   output_type: GeneratorOutput;
   coverage: GeneratorCoverage[];
   user_stories: GeneratedStory[];

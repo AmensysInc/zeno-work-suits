@@ -20,10 +20,18 @@ import {
   type GeneratorCoverage,
   type GeneratorModule,
   type GeneratorOutput,
+  type GeneratorSuggestions,
   type GitHubBranches,
+  type GitHubCommit,
   type GitHubPull,
   type Project,
 } from '../types';
+
+/** What to read instead of a default-branch module: only the code it changed. */
+type Source =
+  | { kind: 'pull'; pull: GitHubPull }
+  | { kind: 'branch'; name: string }
+  | { kind: 'commit'; commit: GitHubCommit };
 
 const coverageLabel: Record<GeneratorCoverage, string> = {
   POSITIVE: 'Positive scenarios',
@@ -38,21 +46,20 @@ const outputLabel: Record<GeneratorOutput, string> = {
   BOTH: 'Both',
 };
 
-function SourceNote({
-  repository,
-  modulePath,
-  commit,
-}: {
-  repository: string;
-  modulePath?: string;
-  commit?: string;
-}) {
-  if (!repository && !commit) return null;
+function SourceNote({ draft }: { draft: GeneratedDraft }) {
+  const from = {
+    DEFAULT: `${draft.source_ref || 'default branch'}${draft.module_path ? ` / ${draft.module_path}` : ''}`,
+    BRANCH: `changes on ${draft.source_ref}`,
+    PULL: `changes in PR #${draft.source_ref}`,
+    COMMIT: 'changes in one commit',
+  }[draft.source_kind ?? 'DEFAULT'];
   return (
     <p className="muted">
-      Source: {repository}
-      {modulePath ? ` / ${modulePath}` : ''}
-      {commit ? ` @ ${commit.slice(0, 7)}` : ''}
+      Source: {draft.repository} · {from}
+      {draft.source_kind !== 'DEFAULT' && draft.module_path
+        ? ` in ${draft.module_path}`
+        : ''}
+      {draft.source_commit ? ` @ ${draft.source_commit.slice(0, 7)}` : ''}
     </p>
   );
 }
@@ -70,19 +77,10 @@ export default function AiGeneratorPage() {
     projects.data?.[0]?.id;
   const project = projects.data?.find((p) => p.id === projectId);
   const [modulePath, setModulePath] = useState('');
-  const [picked, setPull] = useState<
-    (GitHubPull & { projectId?: number }) | null
-  >(null);
-  // A pull request belongs to one repository; switching project drops it.
-  const pull = picked?.projectId === projectId ? picked : null;
-  const [pickedBranch, setBranch] = useState<{
-    name: string;
-    projectId?: number;
-  } | null>(null);
-  const branch =
-    pickedBranch && pickedBranch.projectId === projectId
-      ? pickedBranch.name
-      : '';
+  const [picked, setPicked] = useState<Source | null>(null);
+  const pull = picked?.kind === 'pull' ? picked.pull : null;
+  const branch = picked?.kind === 'branch' ? picked.name : '';
+  const commit = picked?.kind === 'commit' ? picked.commit : null;
   const [outputType, setOutputType] = useState<GeneratorOutput>('BOTH');
   const [coverage, setCoverage] = useState<GeneratorCoverage[]>(['POSITIVE']);
   const [draft, setDraft] = useState<GeneratedDraft | null>(null);
@@ -96,6 +94,16 @@ export default function AiGeneratorPage() {
     issue_ids: number[];
     test_case_ids: number[];
   } | null>(null);
+  // Modules, pull requests, branches and drafts belong to one repository:
+  // switching project starts over instead of showing the previous one's.
+  const [shownProject, setShownProject] = useState(projectId);
+  if (shownProject !== projectId) {
+    setShownProject(projectId);
+    setModulePath('');
+    setPicked(null);
+    setDraft(null);
+    setSaved(null);
+  }
   const reviewRef = useRef<HTMLDivElement>(null);
   const status = useData<{
     github_configured: boolean;
@@ -114,55 +122,31 @@ export default function AiGeneratorPage() {
     `/github/projects/${projectId}/branches`,
     hasRepo && !!status.data?.github_configured,
   );
-  const pullModule = useMutation({
-    mutationFn: async (selected: GitHubPull) =>
-      (
-        await api.get<{
-          module_path: string;
-          changed_files: number;
-          matched_files: number;
-        }>(
-          `/ai-generator/projects/${projectId}/pulls/${selected.number}/module`,
-        )
-      ).data,
-    onSuccess: (result, selected) => {
-      setModulePath(result.module_path);
-      if (result.module_path) {
-        const share =
-          result.matched_files < result.changed_files
-            ? ` (${result.matched_files} of ${result.changed_files} changed files)`
-            : '';
-        toast.success(
-          `Module set to ${result.module_path} from PR #${selected.number}${share}`,
-        );
-      } else {
-        toast.info(
-          result.changed_files
-            ? `PR #${selected.number} changes files outside the listed modules, so the entire repository is selected`
-            : `PR #${selected.number} changes no source files, so the entire repository is selected`,
-        );
-      }
-    },
-    onError: (e) => {
-      setPull(null);
-      toast.error(errorMessage(e));
-    },
-  });
-  const selectPull = (selected: GitHubPull) => {
-    if (pull?.number === selected.number) {
-      setPull(null);
-      return;
-    }
-    setPull({ ...selected, projectId });
-    setBranch(null);
-    pullModule.mutate(selected);
+  const suggestions = useData<GeneratorSuggestions>(
+    `/ai-generator/projects/${projectId}/change-suggestions`,
+    hasRepo && !!status.data?.github_configured,
+  );
+  // A pull request, branch or commit is read by what it changed, across the
+  // whole repository; picking one again clears it.
+  const pick = (next: Source | null) => {
+    setModulePath('');
+    setPicked(next);
   };
-  // One dropdown carries modules, pull requests and branches; the prefix says which.
+  const selectPull = (selected: GitHubPull) =>
+    pick(pull?.number === selected.number ? null : { kind: 'pull', pull: selected });
+  const selectCommit = (selected: GitHubCommit) =>
+    pick(
+      commit?.sha === selected.sha ? null : { kind: 'commit', commit: selected },
+    );
+  // One dropdown carries modules, pull requests, branches and a picked
+  // commit; the prefix says which.
   const source = pull
     ? `pull:${pull.number}`
     : branch
       ? `branch:${branch}`
-      : `module:${modulePath}`;
+      : commit
+        ? `commit:${commit.sha}`
+        : `module:${modulePath}`;
   const selectSource = (value: string) => {
     const [kind, ...rest] = value.split(':');
     const target = rest.join(':');
@@ -170,19 +154,16 @@ export default function AiGeneratorPage() {
       const selected =
         pulls.data?.find((p) => String(p.number) === target) ??
         (pull && String(pull.number) === target ? pull : undefined);
-      if (selected) selectPull(selected);
-      return;
+      if (selected) pick({ kind: 'pull', pull: selected });
+    } else if (kind === 'branch') {
+      pick({ kind: 'branch', name: target });
+    } else if (kind === 'module') {
+      setPicked(null);
+      setModulePath(target);
     }
-    setPull(null);
-    if (kind === 'branch') {
-      // A branch is read whole; its own folders may differ from the default branch.
-      setModulePath('');
-      setBranch({ name: target, projectId });
-      return;
-    }
-    setBranch(null);
-    setModulePath(target);
   };
+  const staleStories = suggestions.data?.stale_story_ids.length ?? 0;
+  const staleTests = suggestions.data?.stale_test_case_ids.length ?? 0;
   const pullOptions = [
     ...(pull && !pulls.data?.some((p) => p.number === pull.number)
       ? [pull]
@@ -204,6 +185,8 @@ export default function AiGeneratorPage() {
           project_id: projectId,
           module_path: modulePath,
           branch,
+          pull_number: pull?.number ?? null,
+          commit: commit?.sha ?? '',
           output_type: outputType,
           coverage: coverage.length ? coverage : ['POSITIVE'],
         })
@@ -321,8 +304,7 @@ export default function AiGeneratorPage() {
               aria-label="Application module"
               value={source}
               onChange={selectSource}
-              loading={pullModule.isPending}
-              disabled={!modules.data || pullModule.isPending}
+              disabled={!modules.data}
               options={[
                 {
                   label: 'Modules',
@@ -347,30 +329,35 @@ export default function AiGeneratorPage() {
                 ...(branchOptions.length
                   ? [{ label: 'Branches', options: branchOptions }]
                   : []),
+                ...(commit
+                  ? [
+                      {
+                        label: 'Commit',
+                        options: [
+                          {
+                            value: `commit:${commit.sha}`,
+                            label: `${commit.sha.slice(0, 7)} ${commit.message}`,
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
               ]}
             />
           </Field>
-          {pull && (
+          {picked && (
             <Alert
               className="linked-context"
               type="info"
               showIcon
-              closable={{ onClose: () => setPull(null) }}
+              closable={{ onClose: () => pick(null) }}
               title={
-                <>
-                  From PR #{pull.number}: {pull.title}
-                  {modulePath ? ` · module ${modulePath}` : ''}
-                </>
+                pull
+                  ? `From PR #${pull.number}: ${pull.title} — reads the files this pull request changes`
+                  : commit
+                    ? `From commit ${commit.sha.slice(0, 7)}: ${commit.message} — reads the files it changes`
+                    : `From branch ${branch} — reads the files it changes compared with ${branches.data?.default_branch ?? 'the default branch'}`
               }
-            />
-          )}
-          {branch && (
-            <Alert
-              className="linked-context"
-              type="info"
-              showIcon
-              closable={{ onClose: () => setBranch(null) }}
-              title={`Generating from branch ${branch} (entire branch)`}
             />
           )}
           <Field label="Generate">
@@ -418,8 +405,19 @@ export default function AiGeneratorPage() {
           configured={status.data?.github_configured}
           selectedPull={pull?.number}
           onSelectPull={selectPull}
+          selectedCommit={commit?.sha}
+          onSelectCommit={selectCommit}
         />
       </div>
+      {(staleStories > 0 || staleTests > 0) && (
+        <Alert
+          className="spaced"
+          type="warning"
+          showIcon
+          title={`${staleStories} saved ${staleStories === 1 ? 'story' : 'stories'} and ${staleTests} test ${staleTests === 1 ? 'case were' : 'cases were'} generated from code that has changed since.`}
+          description="Generate again from the same module, branch or pull request to draft updated versions."
+        />
+      )}
       {generate.isPending && <State loading />}
       {draft && (
         <Card
@@ -437,11 +435,7 @@ export default function AiGeneratorPage() {
             </Button>
           }
         >
-          <SourceNote
-            repository={draft.repository}
-            modulePath={draft.module_path}
-            commit={draft.source_commit}
-          />
+          <SourceNote draft={draft} />
           {draft.notes.map((note) => (
             <p className="muted" key={note}>
               {note}
@@ -504,6 +498,11 @@ export default function AiGeneratorPage() {
                   >
                     <strong>{test.title}</strong>
                   </Checkbox>
+                  <p className="muted">
+                    {test.criteria.length
+                      ? `Covers acceptance criteria ${test.criteria.map((i) => i + 1).join(', ')}`
+                      : 'Not linked to an acceptance criterion'}
+                  </p>
                   <ol>
                     {test.steps.map((step, stepIndex) => (
                       <li key={`${step.action}-${stepIndex}`}>

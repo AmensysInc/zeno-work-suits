@@ -4,6 +4,7 @@ import re
 from urllib.parse import quote
 import httpx
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import select
 from app.core.config import settings
 from app.models import Issue, TestCase
@@ -32,9 +33,29 @@ SOURCE_EXTENSIONS = (
     ".rb",
     ".php",
 )
+# Folders and files that say little about product behavior; read them last.
+LOW_SIGNAL_FOLDERS = {
+    "test",
+    "tests",
+    "__tests__",
+    "spec",
+    "migrations",
+    "alembic",
+    "vendor",
+    "dist",
+    "build",
+    "node_modules",
+}
 MAX_FILES = 10
 MAX_CHARS_PER_FILE = 2500
+MAX_PATCH_CHARS = 3000
 MAX_PULL_FILE_PAGES = 3
+PRIORITIES = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+TEST_TYPES = ("FUNCTIONAL", "REGRESSION", "INTEGRATION", "UI", "API")
+# Draft size limits; the schema rejects anything larger.
+MAX_STORIES = 20
+MAX_LIST = 12
+MAX_STEPS = 20
 
 
 def _repo(db, actor, project_id):
@@ -45,26 +66,50 @@ def _repo(db, actor, project_id):
     return project, name
 
 
+def _default_branch(name):
+    return github.call("GET", f"/repos/{name}").get("default_branch") or "main"
+
+
+def _branch_sha(name, branch):
+    return github.call("GET", f"/repos/{name}/git/ref/heads/{quote(branch)}")["object"][
+        "sha"
+    ]
+
+
 def _repo_info(name, branch=""):
-    if not branch:
-        repo = github.call("GET", f"/repos/{name}")
-        branch = repo.get("default_branch") or "main"
-    ref = github.call("GET", f"/repos/{name}/git/ref/heads/{quote(branch)}")
-    return branch, ref["object"]["sha"]
+    branch = branch or _default_branch(name)
+    return branch, _branch_sha(name, branch)
 
 
-def _tree(name, branch):
+def _tree(name, ref):
+    """Every file at a ref, and whether GitHub cut the list short."""
     tree = github.call(
-        "GET", f"/repos/{name}/git/trees/{quote(branch)}", params={"recursive": 1}
+        "GET", f"/repos/{name}/git/trees/{quote(ref)}", params={"recursive": 1}
     )
-    return tree.get("tree", [])
+    return tree.get("tree", []), bool(tree.get("truncated"))
+
+
+def _is_source(path):
+    return path.endswith(SOURCE_EXTENSIONS)
+
+
+def _low_signal(path):
+    parts = path.lower().split("/")
+    file = parts[-1]
+    return (
+        any(part in LOW_SIGNAL_FOLDERS for part in parts[:-1])
+        or file.startswith("test_")
+        or ".test." in file
+        or ".spec." in file
+        or file == "__init__.py"
+    )
 
 
 def _module_counts(paths):
     """Source files per module: the repository root, top folders and their subfolders."""
     counts: dict[str, int] = {"": 0}
     for path in paths:
-        if not path.endswith(SOURCE_EXTENSIONS):
+        if not _is_source(path):
             continue
         counts[""] += 1
         parts = path.split("/")
@@ -77,12 +122,15 @@ def _module_counts(paths):
 def modules(db, actor, project_id):
     _, name = _repo(db, actor, project_id)
     branch, _ = _repo_info(name)
+    items, _ = _tree(name, branch)
     counts = _module_counts(
-        item.get("path", "") for item in _tree(name, branch) if item.get("type") == "blob"
+        item.get("path", "") for item in items if item.get("type") == "blob"
     )
     return [
         {"path": path, "file_count": count}
-        for path, count in sorted(counts.items(), key=lambda item: (item[0] != "", item[0]))
+        for path, count in sorted(
+            counts.items(), key=lambda item: (item[0] != "", item[0])
+        )
         if count
     ]
 
@@ -93,25 +141,33 @@ def _folders(path):
     return ["/".join(parts[: i + 1]) for i in range(len(parts))]
 
 
-def pull_module(db, actor, project_id, number):
-    """The narrowest folder holding most of a pull request's changed source files."""
-    _, name = _repo(db, actor, project_id)
-    changed = []
+def _pull_files(name, number):
+    files = []
     for page in range(1, MAX_PULL_FILE_PAGES + 1):
         batch = github.call(
             "GET",
             f"/repos/{name}/pulls/{number}/files",
             params={"per_page": 100, "page": page},
         )
-        changed += [f["filename"] for f in batch if f["filename"].endswith(SOURCE_EXTENSIONS)]
+        files += batch
         if len(batch) < 100:
             break
+    return files
+
+
+def pull_module(db, actor, project_id, number):
+    """The narrowest folder holding most of a pull request's changed source files."""
+    _, name = _repo(db, actor, project_id)
+    changed = [
+        f["filename"] for f in _pull_files(name, number) if _is_source(f["filename"])
+    ]
     branch, _ = _repo_info(name)
-    # Only folders on the default branch: that is the code the generator reads.
+    items, _ = _tree(name, branch)
+    # Only folders on the default branch: those are the modules the page lists.
     existing = {
         folder
-        for item in _tree(name, branch)
-        if item.get("type") == "blob" and item.get("path", "").endswith(SOURCE_EXTENSIONS)
+        for item in items
+        if item.get("type") == "blob" and _is_source(item.get("path", ""))
         for folder in _folders(item["path"])
     }
     counts: dict[str, int] = {}
@@ -147,18 +203,128 @@ def _in_module(path, module_path):
     return path == prefix or path.startswith(prefix + "/")
 
 
-def _sample_sources(name, branch, sha, module_path):
-    files = []
-    for item in _tree(name, branch):
-        path = item.get("path", "")
-        if item.get("type") != "blob" or not path.endswith(SOURCE_EXTENSIONS):
-            continue
-        if not _in_module(path, module_path):
-            continue
-        files.append(path)
-        if len(files) >= MAX_FILES:
-            break
-    return [{"path": path, "content": _read_source(name, sha, path)} for path in files]
+def _sample_sources(name, sha, module_path):
+    """The module's source files at a commit, product code before tests and migrations."""
+    items, truncated = _tree(name, sha)
+    paths = [
+        item["path"]
+        for item in items
+        if item.get("type") == "blob"
+        and _is_source(item.get("path", ""))
+        and _in_module(item["path"], module_path)
+    ]
+    paths.sort(key=_low_signal)
+    notes = []
+    if len(paths) > MAX_FILES:
+        notes.append(
+            f"Read {MAX_FILES} of {len(paths)} source files in "
+            f"{module_path or 'the repository'}; pick a narrower module for a closer draft."
+        )
+    if truncated:
+        notes.append(
+            "GitHub returned a partial file list for this large repository, "
+            "so some files were not considered."
+        )
+    picked = paths[:MAX_FILES]
+    return [{"path": p, "content": _read_source(name, sha, p)} for p in picked], notes
+
+
+def _changed_sources(name, sha, files, module_path, label):
+    """Changed source files with their diffs, largest product changes first."""
+    changed = [
+        f
+        for f in files
+        if _is_source(f["filename"])
+        and f.get("status") != "removed"
+        and _in_module(f["filename"], module_path)
+    ]
+    changed.sort(key=lambda f: (_low_signal(f["filename"]), -f.get("changes", 0)))
+    picked = changed[:MAX_FILES]
+    notes = (
+        [
+            f"Read the {len(picked)} largest of {len(changed)} changed source files in {label}."
+        ]
+        if len(changed) > len(picked)
+        else []
+    )
+    sources = [
+        {
+            "path": f["filename"],
+            "status": f.get("status", ""),
+            "patch": (f.get("patch") or "")[:MAX_PATCH_CHARS],
+            "content": _read_source(name, sha, f["filename"]),
+        }
+        for f in picked
+    ]
+    return sources, notes
+
+
+def _no_changes(label, module_path):
+    where = f" in {module_path}" if module_path else ""
+    return HTTPException(422, f"{label} changes no source files{where}")
+
+
+def _resolve(name, data):
+    """The code to draft from: (kind, ref, commit, context, sources, notes)."""
+    module = data.module_path
+    if data.pull_number:
+        number = data.pull_number
+        pull = github.call("GET", f"/repos/{name}/pulls/{number}")
+        sha = pull["head"]["sha"]
+        label = f"PR #{number}"
+        sources, notes = _changed_sources(
+            name, sha, _pull_files(name, number), module, label
+        )
+        if not sources:
+            raise _no_changes(label, module)
+        context = (
+            f"Pull request #{number}: {pull.get('title', '')}\n{pull.get('body') or ''}"
+        )
+        return "PULL", str(number), sha, context[:2000], sources, notes
+    if data.commit:
+        commit = github.call("GET", f"/repos/{name}/commits/{data.commit}")
+        sha = commit["sha"]
+        label = f"commit {sha[:7]}"
+        sources, notes = _changed_sources(
+            name, sha, commit.get("files", []), module, label
+        )
+        if not sources:
+            raise _no_changes(label, module)
+        message = (commit.get("commit") or {}).get("message", "")
+        return "COMMIT", sha, sha, f"Commit {sha[:7]}: {message}"[:2000], sources, notes
+    default = _default_branch(name)
+    if data.branch and data.branch != default:
+        sha = _branch_sha(name, data.branch)
+        base = _branch_sha(name, default)
+        # Compare by SHA so a branch name with slashes is never ambiguous.
+        compare = github.call("GET", f"/repos/{name}/compare/{base}...{sha}")
+        sources, notes = _changed_sources(
+            name,
+            sha,
+            compare.get("files", []),
+            module,
+            f"{data.branch} compared with {default}",
+        )
+        context = f"Changes on branch {data.branch} compared with {default}"
+        if not sources:
+            sources, notes = _sample_sources(name, sha, module)
+            notes.insert(
+                0,
+                f"{data.branch} has no source changes compared with {default}, "
+                "so its files were read instead.",
+            )
+            context = f"Branch {data.branch}"
+        return "BRANCH", data.branch, sha, context, sources, notes
+    sha = _branch_sha(name, default)
+    sources, notes = _sample_sources(name, sha, module)
+    return (
+        "DEFAULT",
+        default,
+        sha,
+        f"Module {module or '(entire repository)'} on {default}",
+        sources,
+        notes,
+    )
 
 
 def _signals(sources):
@@ -172,7 +338,8 @@ def _signals(sources):
     }
 
 
-def _coverage_tests(module, coverage):
+def _coverage_tests(module, coverage, covers):
+    """Template tests for each coverage kind; `covers` maps a kind to criterion indexes."""
     kinds = coverage or ["POSITIVE"]
     tests = []
     if "POSITIVE" in kinds:
@@ -190,6 +357,7 @@ def _coverage_tests(module, coverage):
                         expected_result="The system saves the change and shows the updated data.",
                     ),
                 ],
+                criteria=covers["POSITIVE"],
             )
         )
     if "NEGATIVE" in kinds:
@@ -203,6 +371,7 @@ def _coverage_tests(module, coverage):
                         expected_result="The request is rejected.",
                     )
                 ],
+                criteria=covers["NEGATIVE"],
             )
         )
     if "BOUNDARY" in kinds:
@@ -220,6 +389,7 @@ def _coverage_tests(module, coverage):
                         expected_result="Validation is displayed and nothing is saved.",
                     ),
                 ],
+                criteria=covers["BOUNDARY"],
             )
         )
     if "VALIDATION" in kinds:
@@ -233,23 +403,22 @@ def _coverage_tests(module, coverage):
                         expected_result="Validation messages are displayed.",
                     )
                 ],
+                criteria=covers["VALIDATION"],
             )
         )
-    return tests or _coverage_tests(module, ["POSITIVE"])
+    return tests or _coverage_tests(module, ["POSITIVE"], covers)
 
 
-def _fallback(project, repo, module_path, sha, data, sources):
+def _fallback(project, module_path, data, sources, reason):
     module = module_path.split("/")[-1] if module_path else project.name
     signals = _signals(sources)
     route_hint = ", ".join(signals["routes"][:4]) or "the module screens and APIs"
     file_hint = ", ".join(signals["files"][:4]) or "linked repository files"
     notes = [
-        "Generated from source-code signals. Review business wording before saving.",
+        f"AI draft unavailable: {reason} This is a code-analysis template; "
+        "rewrite it before saving.",
         f"Files sampled: {file_hint}",
-        f"Source commit: {sha[:12]}",
     ]
-    if not settings.openai_api_key:
-        notes.append("OpenAI is not configured, so this draft used code analysis only.")
     stories = []
     if data.output_type in ("USER_STORIES", "BOTH"):
         stories.append(
@@ -267,8 +436,14 @@ def _fallback(project, repo, module_path, sha, data, sources):
                 test_cases=[],
             )
         )
-    if data.output_type in ("TEST_CASES", "BOTH"):
-        target = stories or [
+        covers = {
+            "POSITIVE": [0, 1],
+            "NEGATIVE": [],
+            "BOUNDARY": [2],
+            "VALIDATION": [2],
+        }
+    else:
+        stories.append(
             GeneratedStory(
                 title=f"Validate {module} behavior",
                 description=f"Generated coverage holder for {module}.",
@@ -276,19 +451,13 @@ def _fallback(project, repo, module_path, sha, data, sources):
                     f"The {module} behavior is available to authorized users."
                 ],
             )
-        ]
-        target[0].test_cases = _coverage_tests(module, data.coverage)
-        stories = target
-    return GeneratedDraft(
-        project_id=project.id,
-        repository=repo,
-        module_path=module_path,
-        source_commit=sha,
-        output_type=data.output_type,
-        coverage=data.coverage,
-        user_stories=stories,
-        notes=notes,
-    )
+        )
+        covers = {
+            kind: [0] for kind in ("POSITIVE", "NEGATIVE", "BOUNDARY", "VALIDATION")
+        }
+    if data.output_type in ("TEST_CASES", "BOTH"):
+        stories[0].test_cases = _coverage_tests(module, data.coverage, covers)
+    return stories, notes
 
 
 def _text_list(value):
@@ -303,6 +472,39 @@ def _text_list(value):
             if text:
                 items.append(str(text).strip())
     return items
+
+
+def _choice(value, allowed, default):
+    """An allowed value regardless of case or spacing ("High" → "HIGH"), else the default."""
+    text = str(value or "").strip().upper().replace(" ", "_")
+    return text if text in allowed else default
+
+
+def _number(value, default, low, high):
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, number))
+
+
+def _covers(value, criteria_texts):
+    """Criterion indexes from numbers or from criterion text, in range and unique."""
+    found = []
+    for item in value if isinstance(value, list) else [value]:
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, (int, float)) or (
+            isinstance(item, str) and item.strip().isdigit()
+        ):
+            index = int(item)
+        elif isinstance(item, str) and item.strip() in criteria_texts:
+            index = criteria_texts.index(item.strip())
+        else:
+            continue
+        if 0 <= index < len(criteria_texts) and index not in found:
+            found.append(index)
+    return found[:MAX_LIST]
 
 
 def _normalize_step(step, index):
@@ -324,7 +526,7 @@ def _normalize_step(step, index):
     }
 
 
-def _normalize_test(test):
+def _normalize_test(test, criteria_texts):
     if isinstance(test, str):
         test = {"title": test}
     if not isinstance(test, dict) or not test.get("title"):
@@ -336,12 +538,14 @@ def _normalize_test(test):
     ]
     return {
         "title": str(test["title"])[:300],
-        "test_type": test.get("test_type") or "FUNCTIONAL",
-        "priority": test.get("priority") or "MEDIUM",
+        # Coverage words such as "Negative" are not test types; they become FUNCTIONAL.
+        "test_type": _choice(test.get("test_type"), TEST_TYPES, "FUNCTIONAL"),
+        "priority": _choice(test.get("priority"), PRIORITIES, "MEDIUM"),
         "preconditions": str(test.get("preconditions") or ""),
         "test_data": str(test.get("test_data") or ""),
         "expected_result": str(test.get("expected_result") or ""),
-        "steps": steps,
+        "steps": steps[:MAX_STEPS],
+        "criteria": _covers(test.get("covers", test.get("criteria")), criteria_texts),
     }
 
 
@@ -353,87 +557,135 @@ def _normalize_story(story):
     title = story.get("title") or story.get("summary") or story.get("name")
     if not title:
         return None
+    criteria_texts = _text_list(
+        story.get("acceptance_criteria") or story.get("criteria")
+    )[:MAX_LIST]
     tests = [
         normalized
         for test in story.get("test_cases") or story.get("tests") or []
-        if (normalized := _normalize_test(test))
+        if (normalized := _normalize_test(test, criteria_texts))
     ]
-    return {
-        "title": str(title)[:300],
-        "description": str(story.get("description") or ""),
-        "priority": story.get("priority") or "MEDIUM",
-        "story_points": story.get("story_points") or 3,
-        "acceptance_criteria": _text_list(
-            story.get("acceptance_criteria") or story.get("criteria")
-        ),
-        "test_cases": tests,
-    }
+    try:
+        return GeneratedStory.model_validate(
+            {
+                "title": str(title)[:300],
+                "description": str(story.get("description") or ""),
+                "priority": _choice(story.get("priority"), PRIORITIES, "MEDIUM"),
+                "story_points": _number(story.get("story_points"), 3, 0, 100),
+                "acceptance_criteria": criteria_texts,
+                "test_cases": tests[:MAX_LIST],
+            }
+        )
+    except ValidationError:
+        # One malformed story is dropped; the rest of the draft is kept.
+        return None
 
 
 def _unwrap(raw):
     # The model sometimes echoes the request and nests the answer under "schema".
     for key in ("schema", "draft", "result", "output"):
         inner = raw.get(key)
-        if isinstance(inner, dict) and not (raw.get("user_stories") or raw.get("stories")):
+        if isinstance(inner, dict) and not (
+            raw.get("user_stories") or raw.get("stories")
+        ):
             raw = inner
     return raw
 
 
-def _normalize_draft(raw, project, repo, module_path, sha, data):
+def _normalize_draft(raw):
+    """Stories and notes from the model's answer, repaired rather than rejected."""
     raw = _unwrap(raw)
     stories = raw.get("user_stories") or raw.get("stories") or []
+    if not isinstance(stories, list):
+        stories = [stories]
+    normalized = [story for item in stories if (story := _normalize_story(item))][
+        :MAX_STORIES
+    ]
     notes = _text_list(raw.get("notes"))
     notes.append("Review and approve each item before saving it into the project.")
-    payload = {
-        "project_id": project.id,
-        "repository": repo,
-        "module_path": module_path,
-        "source_commit": sha,
-        "output_type": data.output_type,
-        "coverage": data.coverage or raw.get("coverage") or ["POSITIVE"],
-        "user_stories": [
-            normalized
-            for story in stories
-            if (normalized := _normalize_story(story))
-        ],
-        "notes": notes,
-    }
-    return GeneratedDraft.model_validate(payload)
+    return normalized, notes
 
 
-def _openai_draft(project, repo, module_path, sha, data, sources):
-    if not settings.openai_api_key:
-        return None
-    prompt = {
-        "repository": repo,
-        "module_path": module_path,
-        "project": project.name,
-        "output_type": data.output_type,
-        "coverage": data.coverage,
-        "sources": sources,
-        "schema": {
-            "user_stories": [
+PROMPT_SCHEMA = {
+    "user_stories": [
+        {
+            "title": "string",
+            "description": "As a ... I want ... so that ...",
+            "priority": "LOW | MEDIUM | HIGH | CRITICAL",
+            "story_points": "integer from 1 to 13",
+            "acceptance_criteria": ["string"],
+            "test_cases": [
                 {
                     "title": "string",
-                    "description": "As a ... I want ... so that ...",
-                    "acceptance_criteria": ["string"],
-                    "test_cases": [
+                    "test_type": "FUNCTIONAL | REGRESSION | INTEGRATION | UI | API",
+                    "priority": "LOW | MEDIUM | HIGH | CRITICAL",
+                    "covers": [
+                        "index (from 0) of each acceptance criterion this test proves"
+                    ],
+                    "preconditions": "string",
+                    "test_data": "string",
+                    "expected_result": "string",
+                    "steps": [
                         {
-                            "title": "string",
-                            "steps": [
-                                {
-                                    "action": "string",
-                                    "test_data": "string",
-                                    "expected_result": "string",
-                                }
-                            ],
+                            "action": "string",
+                            "test_data": "string",
+                            "expected_result": "string",
                         }
                     ],
                 }
             ],
-            "notes": ["string"],
-        },
+        }
+    ],
+    "notes": ["string"],
+}
+
+
+def _openai_error(response):
+    status = response.status_code
+    if status == 401:
+        return "OpenAI rejected the API key."
+    if status == 429:
+        return "OpenAI rate limit or quota was reached."
+    return f"OpenAI returned error {status}."
+
+
+def _openai_draft(project, repo, module_path, data, sources, context):
+    """(stories, notes) from OpenAI, or (None, reason) when no usable draft came back."""
+    if not settings.openai_api_key:
+        return None, "OpenAI is not configured (no OPENAI_API_KEY)."
+    if not sources:
+        return None, "No source files were found to read."
+    changed = any("patch" in source for source in sources)
+    prompt = {
+        "repository": repo,
+        "project": project.name,
+        "source": context,
+        "module_path": module_path,
+        "output_type": data.output_type,
+        "coverage": data.coverage,
+        "sources": sources,
+        "schema": PROMPT_SCHEMA,
     }
+    rules = [
+        "Generate concise software requirements as JSON.",
+        "Only include behavior supported by the source files.",
+        (
+            "The sources are the files this change touched: 'patch' is the unified diff "
+            "and 'content' the file after the change. Describe the behavior the change "
+            "adds or alters."
+            if changed
+            else "The sources are files from one module of the application."
+        ),
+        "Write at most 8 user stories, 8 acceptance criteria per story, "
+        "8 test cases per story and 12 steps per test case.",
+        "Use exactly one of the listed words for priority and test_type.",
+        "Write test cases for each requested coverage kind (positive, negative, "
+        "boundary, validation) and say which in the title.",
+        "In 'covers', list the acceptance criteria each test case proves by index.",
+        "Respond with a single JSON object shaped exactly like the request's "
+        '"schema" value, with user_stories and notes at the top level. '
+        "Do not echo the request.",
+    ]
     try:
         response = httpx.post(
             "https://api.openai.com/v1/chat/completions",
@@ -443,40 +695,48 @@ def _openai_draft(project, repo, module_path, sha, data, sources):
                 "model": "gpt-4o-mini",
                 "response_format": {"type": "json_object"},
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "Generate concise software requirements as JSON. "
-                            "Only include behavior supported by the source files. "
-                            "Human review is required before publishing. "
-                            "Respond with a single JSON object shaped exactly like "
-                            "the request's \"schema\" value, with user_stories and "
-                            "notes at the top level. Do not echo the request."
-                        ),
-                    },
+                    {"role": "system", "content": " ".join(rules)},
                     {"role": "user", "content": json.dumps(prompt)},
                 ],
             },
         )
+    except httpx.TimeoutException:
+        return None, "OpenAI did not answer within 60 seconds."
     except httpx.HTTPError:
-        return None
+        return None, "Could not reach OpenAI."
     if response.status_code >= 400:
-        return None
+        return None, _openai_error(response)
     try:
         raw = json.loads(response.json()["choices"][0]["message"]["content"])
-        draft = _normalize_draft(raw, project, repo, module_path, sha, data)
-    except (KeyError, ValueError, TypeError):
-        return None
-    return draft if draft.user_stories else None
+        stories, notes = _normalize_draft(raw)
+    except (KeyError, IndexError, ValueError, TypeError, AttributeError):
+        return None, "OpenAI's answer could not be read."
+    if not stories:
+        return None, "OpenAI returned no usable user stories for these files."
+    return stories, notes
 
 
 def generate(db, actor, data):
     project, name = _repo(db, actor, data.project_id)
-    _, sha = _repo_info(name, data.branch)
-    # Read the tree by commit so a branch name with slashes is never ambiguous.
-    sources = _sample_sources(name, sha, sha, data.module_path)
-    draft = _openai_draft(project, name, data.module_path, sha, data, sources)
-    return draft or _fallback(project, name, data.module_path, sha, data, sources)
+    kind, ref, sha, context, sources, source_notes = _resolve(name, data)
+    stories, notes = _openai_draft(
+        project, name, data.module_path, data, sources, context
+    )
+    if stories is None:
+        reason = notes
+        stories, notes = _fallback(project, data.module_path, data, sources, reason)
+    return GeneratedDraft(
+        project_id=project.id,
+        repository=name,
+        module_path=data.module_path,
+        source_commit=sha,
+        source_kind=kind,
+        source_ref=ref,
+        output_type=data.output_type,
+        coverage=data.coverage,
+        user_stories=stories,
+        notes=[*notes, *source_notes, f"Source commit: {sha[:12]}"],
+    )
 
 
 def save(db, actor, data):
@@ -490,6 +750,8 @@ def save(db, actor, data):
         "repository": data.repository,
         "module_path": data.module_path,
         "source_commit": data.source_commit,
+        "source_kind": data.source_kind,
+        "source_ref": data.source_ref,
         "generator": "ai-requirements-test-generator",
     }
     issue_ids = []
@@ -544,7 +806,12 @@ def save(db, actor, data):
                         )
                         for i, step in enumerate(test.steps)
                     ],
-                    criterion_ids=criterion_ids,
+                    # Only the criteria this test proves, so coverage stays honest.
+                    criterion_ids=[
+                        criterion_ids[i]
+                        for i in dict.fromkeys(test.criteria)
+                        if 0 <= i < len(criterion_ids)
+                    ],
                 ),
             )
             saved.ai_source = source
@@ -554,29 +821,84 @@ def save(db, actor, data):
 
 
 def suggestions(db, actor, project_id):
+    """Generated items whose own source (branch, pull request or module) has changed."""
     project, name = _repo(db, actor, project_id)
-    _, current = _repo_info(name)
-    story_ids = []
-    test_ids = []
-    source_commits = set()
-    for issue in db.scalars(select(Issue).where(Issue.project_id == project.id)):
-        source = issue.ai_source or {}
-        if source.get("repository") == name and source.get("source_commit") != current:
-            story_ids.append(issue.id)
-            source_commits.add(source.get("source_commit", ""))
-    for test in db.scalars(select(TestCase).where(TestCase.project_id == project.id)):
-        source = test.ai_source or {}
-        if source.get("repository") == name and source.get("source_commit") != current:
-            test_ids.append(test.id)
-            source_commits.add(source.get("source_commit", ""))
+    default = _default_branch(name)
+    heads: dict[tuple[str, str], str | None] = {}
+    moved: dict[tuple[str, str, str], bool] = {}
+
+    def head(kind, ref):
+        key = (kind, ref)
+        if key not in heads:
+            try:
+                if kind == "COMMIT":
+                    heads[key] = None  # Pinned to one commit: never out of date.
+                elif kind == "PULL":
+                    heads[key] = github.call("GET", f"/repos/{name}/pulls/{ref}")[
+                        "head"
+                    ]["sha"]
+                else:
+                    heads[key] = _branch_sha(name, ref)
+            except HTTPException as error:
+                if error.status_code != 404:
+                    raise
+                heads[key] = None  # The branch or pull request is gone.
+        return heads[key]
+
+    def changed(old, new, module_path):
+        if old == new:
+            return False
+        key = (old, new, module_path)
+        if key not in moved:
+            try:
+                files = github.call("GET", f"/repos/{name}/compare/{old}...{new}").get(
+                    "files", []
+                )
+                moved[key] = any(
+                    _is_source(f["filename"]) and _in_module(f["filename"], module_path)
+                    for f in files
+                )
+            except HTTPException as error:
+                if error.status_code != 404:
+                    raise
+                moved[key] = True  # The old commit was rewritten away.
+        return moved[key]
+
+    stale_commits = set()
+
+    def stale(source):
+        commit = source.get("source_commit")
+        if source.get("repository") != name or not commit:
+            return False
+        kind = source.get("source_kind") or "DEFAULT"
+        ref = source.get("source_ref") or default
+        current = head(kind, ref)
+        if current and changed(commit, current, source.get("module_path", "")):
+            stale_commits.add(commit)
+            return True
+        return False
+
+    story_ids = [
+        issue.id
+        for issue in db.scalars(select(Issue).where(Issue.project_id == project.id))
+        if stale(issue.ai_source or {})
+    ]
+    test_ids = [
+        test.id
+        for test in db.scalars(
+            select(TestCase).where(TestCase.project_id == project.id)
+        )
+        if stale(test.ai_source or {})
+    ]
+    current = head("DEFAULT", default)
     return {
-        "source_commit": next(iter(source_commits - {""}), current),
+        "source_commit": next(iter(sorted(stale_commits)), current),
         "current_commit": current,
         "stale_story_ids": story_ids,
         "stale_test_case_ids": test_ids,
         "message": (
             "Generated items may need updates."
             if story_ids or test_ids
-            else "Generated items are up to date with the current repository commit."
+            else "Generated items are up to date with their source code."
         ),
     }

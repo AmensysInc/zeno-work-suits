@@ -41,8 +41,13 @@ const CreateContext = createContext<(initial?: Partial<Issue>) => void>(
 );
 export const useCreateIssue = () => useContext(CreateContext);
 const ProjectContext = createContext<number | undefined>(undefined);
-/** The project in the URL, else the last one visited, else the first one. */
+/**
+ * The project in the URL, else the last one visited this session. Undefined
+ * until the person picks one, so nothing is preselected right after sign-in.
+ */
 export const useCurrentProject = () => useContext(ProjectContext);
+/** Pages outside /projects/:id that carry their project as ?project=. */
+const projectQueryPages = ['/test-cases', '/chat', '/ai-generator', '/github'];
 const PageProjectContext = createContext<(id?: number) => void>(() => {});
 /**
  * For pages whose URL has no project (issue and test case details): marks the
@@ -91,12 +96,13 @@ export default function AppShell() {
       /* storage unavailable */
     }
   }, [fromUrl]);
-  const projectId =
-    [fromUrl, lastProject].find((id) =>
-      projects.data?.some((p) => p.id === id),
-    ) ?? projects.data?.[0]?.id;
+  const projectId = [fromUrl, lastProject].find((id) =>
+    projects.data?.some((p) => p.id === id),
+  );
   const inProject = (page: string) =>
     projectId ? `/projects/${projectId}/${page}` : '/projects';
+  const withProject = (page: string) =>
+    projectId ? `${page}?project=${projectId}` : page;
   const sections: [string, NavItem[]][] = [
     [
       '',
@@ -107,11 +113,7 @@ export default function AppShell() {
         ['Sprints', inProject('sprints'), <FieldTimeOutlined />],
         ['Board', inProject('board'), <ProjectOutlined />],
         ['My Issues', '/my-issues', <ProfileOutlined />],
-        [
-          'Chats',
-          projectId ? `/chat?project=${projectId}` : '/chat',
-          <MessageOutlined />,
-        ],
+        ['Chats', withProject('/chat'), <MessageOutlined />],
         ['Automations', '/automations', <ThunderboltOutlined />],
         ...(me.data?.role === 'ADMIN'
           ? [['People', '/admin/users', <TeamOutlined />] as NavItem]
@@ -122,22 +124,14 @@ export default function AppShell() {
       'Quality',
       [
         ['QA Dashboard', inProject('quality'), <FundOutlined />],
-        [
-          'AI Generator',
-          projectId ? `/ai-generator?project=${projectId}` : '/ai-generator',
-          <RobotOutlined />,
-        ],
-        [
-          'Test Repository',
-          projectId ? `/test-cases?project=${projectId}` : '/test-cases',
-          <ExperimentOutlined />,
-        ],
+        ['AI Generator', withProject('/ai-generator'), <RobotOutlined />],
+        ['Test Repository', withProject('/test-cases'), <ExperimentOutlined />],
         ['Test Runs', inProject('test-runs'), <PlayCircleOutlined />],
         ['Bugs', inProject('bugs'), <BugOutlined />],
         ['Traceability', inProject('traceability'), <ApartmentOutlined />],
       ],
     ],
-    ['Code', [['GitHub', '/github', <GithubOutlined />]]],
+    ['Code', [['GitHub', withProject('/github'), <GithubOutlined />]]],
     ['', [['Voice Agent', '/voice-agent', <AudioOutlined />]]],
   ];
   const toItem = ([name, url, icon]: NavItem) => ({
@@ -183,14 +177,10 @@ export default function AppShell() {
   const switchProject = (id: number) => {
     if (projectPage) {
       nav(`/projects/${id}/${projectPage[2]}${location.search}`);
-    } else if (location.pathname === '/test-cases') {
+    } else if (projectQueryPages.includes(location.pathname)) {
       const params = new URLSearchParams(location.search);
       params.set('project', String(id));
-      nav(`/test-cases?${params}`);
-    } else if (location.pathname === '/chat') {
-      nav(`/chat?project=${id}`);
-    } else if (location.pathname === '/ai-generator') {
-      nav(`/ai-generator?project=${id}`);
+      nav(`${location.pathname}?${params}`);
     } else {
       nav(`/projects/${id}`);
     }
@@ -257,7 +247,9 @@ export default function AppShell() {
                     className="project-switcher"
                     aria-label="Project"
                     value={projectId}
-                    placeholder="No projects"
+                    placeholder={
+                      projects.data?.length ? 'Select project' : 'No projects'
+                    }
                     disabled={!projects.data?.length}
                     onChange={switchProject}
                     showSearch={{ optionFilterProp: 'label' }}

@@ -7,6 +7,18 @@ api.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+/**
+ * Forgets the signed-in session, including the last project visited, so the
+ * next person to sign in on this browser does not start in someone else's project.
+ */
+export function clearSession() {
+  try {
+    localStorage.removeItem('trackly_token');
+    localStorage.removeItem('trackly_project');
+  } catch {
+    /* storage unavailable */
+  }
+}
 api.interceptors.response.use(
   (r) => r,
   (error) => {
@@ -14,7 +26,7 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       !error.config.url.includes('/auth/')
     ) {
-      localStorage.removeItem('trackly_token');
+      clearSession();
       window.location.assign('/login');
     }
     return Promise.reject(error);

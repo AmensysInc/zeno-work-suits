@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Avatar,
@@ -19,6 +20,7 @@ import {
   PullRequestOutlined,
 } from '@ant-design/icons';
 import { useData, useMe, useProjects, useSave } from '../hooks/data';
+import { useCurrentProject } from '../components/layout/AppShell';
 import { Badge, PageHeader, State } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
 import { Select } from '../components/ui/form';
@@ -404,12 +406,32 @@ export default function GitHubPage() {
   const projects = useProjects();
   const status = useData<{ configured: boolean }>('/github/status');
   const [linking, setLinking] = useState(false);
-  const [selected, setSelected] = useState<number>();
+  const [params, setParams] = useSearchParams();
+  const switcherProject = useCurrentProject();
   const linked = (projects.data ?? []).filter((p) => repoName(p.github_repo));
   const manageable = (projects.data ?? []).filter((p) =>
     canManageProject(me.data, p),
   );
-  const current = linked.find((p) => p.id === selected) ?? linked[0];
+  // The repository follows the project in the URL and the top-bar switcher.
+  const wanted = Number(params.get('project')) || switcherProject;
+  const wantedProject = projects.data?.find((p) => p.id === wanted);
+  const current = wantedProject
+    ? linked.find((p) => p.id === wantedProject.id)
+    : linked[0];
+  const select = (id: number) => {
+    const next = new URLSearchParams(params);
+    next.set('project', String(id));
+    setParams(next);
+  };
+  // Put a fallback repository's project in the URL so the switcher shows it too.
+  const shownId = current?.id;
+  useEffect(() => {
+    if (shownId && !params.get('project')) {
+      const next = new URLSearchParams(params);
+      next.set('project', String(shownId));
+      setParams(next, { replace: true });
+    }
+  }, [params, setParams, shownId]);
   const configured = status.data?.configured;
   return (
     <>
@@ -455,7 +477,20 @@ export default function GitHubPage() {
           }`}
         />
       )}
-      {current && (
+      {wantedProject && !current && linked.length > 0 && (
+        <Alert
+          className="github-setup"
+          type="info"
+          showIcon
+          title={`${wantedProject.name} has no linked repository.`}
+          description={
+            canManageProject(me.data, wantedProject) && configured
+              ? 'Use “Link repository” to connect one, or pick a linked repository below.'
+              : 'Pick a linked repository below, or ask an admin or the project’s manager to link one.'
+          }
+        />
+      )}
+      {linked.length > 0 && (
         <div className="github-layout">
           <Card
             className="card github-repos"
@@ -465,8 +500,8 @@ export default function GitHubPage() {
             <Menu
               aria-label="Linked repositories"
               mode="inline"
-              selectedKeys={[String(current.id)]}
-              onClick={({ key }) => setSelected(Number(key))}
+              selectedKeys={current ? [String(current.id)] : []}
+              onClick={({ key }) => select(Number(key))}
               items={linked.map((p) => ({
                 key: String(p.id),
                 icon: (
@@ -484,7 +519,9 @@ export default function GitHubPage() {
             />
           </Card>
           <div>
-            {configured ? (
+            {!current ? (
+              <Empty description="Select a linked repository." />
+            ) : configured ? (
               <Repository
                 key={current.id}
                 project={current}
@@ -507,7 +544,7 @@ export default function GitHubPage() {
               ? current.id
               : undefined
           }
-          onLinked={setSelected}
+          onLinked={(id) => select(id)}
           onClose={() => setLinking(false)}
         />
       )}
