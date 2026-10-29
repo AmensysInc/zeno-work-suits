@@ -3,8 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { Card, Descriptions, Tabs, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { useData, useIssues, useSave } from '../hooks/data';
-import { type Issue, type Sprint, statuses, priorities } from '../types';
+import { useCanLead, useData, useIssues, useSave } from '../hooks/data';
+import {
+  type Issue,
+  type Sprint,
+  type TestCase,
+  statuses,
+  priorities,
+} from '../types';
 import { State, Badge, Field } from '../components/ui/shared';
 import { Button } from '../components/ui/button';
 import { DateInput, Select, labelled } from '../components/ui/form';
@@ -28,6 +34,11 @@ export default function IssueDetailsPage() {
   const del = useSave(`/issues/${issueId}`, 'delete', 'Issue deleted');
   const create = useCreateIssue();
   const nav = useNavigate();
+  const canLead = useCanLead(issue?.project_id);
+  const tests = useData<TestCase[]>(
+    `/test-cases?issue_id=${issueId}`,
+    canLead && issue?.issue_type === 'STORY',
+  );
   const [tab, setTab] = useState('Overview');
   usePageProject(issue?.project_id);
   if (!issue) return <State loading={query.isLoading} error={query.error} />;
@@ -59,13 +70,28 @@ export default function IssueDetailsPage() {
           >
             Edit issue
           </Button>
+          {canLead && (
           <Button
             variant="destructive"
             icon={<DeleteOutlined />}
             onClick={async () => {
+              const subtasks =
+                all.data?.filter((i) => i.parent_issue_id === issue.id)
+                  .length ?? 0;
+              const runs = (tests.data ?? []).reduce(
+                (n, t) => n + t.execution_count,
+                0,
+              );
+              const lost = [
+                subtasks && `${subtasks} subtask${subtasks === 1 ? '' : 's'}`,
+                tests.data?.length &&
+                  `${tests.data.length} test case${tests.data.length === 1 ? '' : 's'} with ${runs} recorded run${runs === 1 ? '' : 's'}`,
+              ].filter(Boolean);
               if (
                 await confirm(
-                  'Delete this issue and its criteria, tests and comments?',
+                  `Delete ${issue.issue_key} with its criteria and comments${
+                    lost.length ? `, ${lost.join(' and ')}` : ''
+                  }? This cannot be undone.`,
                   { okText: 'Delete' },
                 )
               ) {
@@ -80,6 +106,7 @@ export default function IssueDetailsPage() {
           >
             Delete
           </Button>
+          )}
         </div>
       </div>
       <div className="detail-grid">
@@ -96,7 +123,7 @@ export default function IssueDetailsPage() {
             ].map((t) => ({ key: t, label: t }))}
           />
           {tab === 'Comments' ? (
-            <Comments issueId={issue.id} />
+            <Comments issueId={issue.id} projectId={issue.project_id} />
           ) : tab === 'Activity' ? (
             <ActivityHistory issueId={issue.id} />
           ) : tab === 'Test Cases' ? (

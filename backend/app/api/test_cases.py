@@ -63,6 +63,5 @@ def status(id: int, data: TestStatusIn, db: DB, actor: Actor):
 
 @router.delete("/{id}", status_code=204)
 def delete(id: int, db: DB, actor: Actor):
-    db.delete(child_access(db, TestCase, id, actor))
-    db.commit()
+    test_cases.delete(db, actor, id)
     return Response(status_code=204)

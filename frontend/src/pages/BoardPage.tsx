@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, Empty } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { useData, useIssues } from '../hooks/data';
+import { useCanLead, useData, useIssues } from '../hooks/data';
 import type { Project, Sprint } from '../types';
 import { PageHeader, State } from '../components/ui/shared';
 import { Button, LinkButton } from '../components/ui/button';
@@ -26,6 +26,7 @@ export default function BoardPage() {
   const [completing, setCompleting] = useState(false);
   const kanban = project.data?.board_type === 'KANBAN';
   const active = sprints.data?.find((s) => s.status === 'ACTIVE');
+  const canLead = useCanLead(pid);
   const cutoff = new Date(
     Date.now() - DONE_WINDOW_DAYS * 86400000,
   ).toISOString();
@@ -71,7 +72,7 @@ export default function BoardPage() {
             <LinkButton variant="outline" to={`/projects/${pid}/sprints`}>
               Sprint planning
             </LinkButton>
-            {active && (
+            {active && canLead && (
               <Button onClick={() => setCompleting(true)}>
                 Complete sprint
               </Button>

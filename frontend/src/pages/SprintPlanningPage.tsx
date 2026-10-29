@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { useData, useIssues, useSave } from '../hooks/data';
+import { useCanLead, useData, useIssues, useSave } from '../hooks/data';
 import type { Sprint } from '../types';
 import { PageHeader, State, Badge } from '../components/ui/shared';
 import { Button, LinkButton } from '../components/ui/button';
@@ -30,15 +30,22 @@ export default function SprintPlanningPage() {
   );
   const sprintIssues =
     issues.data?.filter((i) => i.sprint_id === selected?.id) ?? [];
+  const canLead = useCanLead(pid);
   return (
     <>
       <PageHeader
         title="Sprint planning"
-        description="Give your team a clear goal and a focused set of work."
+        description={
+          canLead
+            ? 'Give your team a clear goal and a focused set of work.'
+            : 'Project leads and managers create, start and complete sprints.'
+        }
       >
-        <Button icon={<PlusOutlined />} onClick={() => setModal('create')}>
-          Create sprint
-        </Button>
+        {canLead && (
+          <Button icon={<PlusOutlined />} onClick={() => setModal('create')}>
+            Create sprint
+          </Button>
+        )}
       </PageHeader>
       <State
         loading={query.isLoading || issues.isLoading}
@@ -71,12 +78,12 @@ export default function SprintPlanningPage() {
               </div>
               <div className="actions">
                 <Badge value={selected.status} />
-                {selected.status !== 'COMPLETED' && (
+                {canLead && selected.status !== 'COMPLETED' && (
                   <Button variant="outline" onClick={() => setModal('edit')}>
                     Edit
                   </Button>
                 )}
-                {selected.status === 'PLANNED' && (
+                {canLead && selected.status === 'PLANNED' && (
                   <>
                     <Button
                       variant="ghost"
@@ -109,9 +116,11 @@ export default function SprintPlanningPage() {
                     <LinkButton variant="outline" to={`/projects/${pid}/board`}>
                       View board
                     </LinkButton>
-                    <Button onClick={() => setModal('complete')}>
-                      Complete sprint
-                    </Button>
+                    {canLead && (
+                      <Button onClick={() => setModal('complete')}>
+                        Complete sprint
+                      </Button>
+                    )}
                   </>
                 )}
               </div>

@@ -11,6 +11,13 @@ from app.db.database import Base, get_db
 from app.main import app
 from app import models
 from app.core.security import hash_password
+from app.services import auth as auth_service
+
+
+@pytest.fixture(autouse=True)
+def forget_failed_logins():
+    """Sign-in throttling is per process; start each test without old failures."""
+    auth_service._failures.clear()
 
 
 @pytest.fixture
@@ -59,7 +66,8 @@ def auth(client):
 
 
 def create_user(client, admin_headers, first, last, email, role="EMPLOYEE"):
-    """Creates a regular user through the admin API and signs them in with the temporary password."""
+    """Creates a regular user through the admin API, signs them in with the
+    temporary password and replaces it, as the first sign-in requires."""
     issued = client.post(
         "/api/admin/users",
         headers=admin_headers,
@@ -72,8 +80,14 @@ def create_user(client, admin_headers, first, last, email, role="EMPLOYEE"):
         },
     )
     assert issued.status_code == 201, issued.text
+    temporary = issued.json()["temporary_password"]
     token = client.post(
-        "/api/auth/login",
-        json={"email": email, "password": issued.json()["temporary_password"]},
+        "/api/auth/login", json={"email": email, "password": temporary}
     ).json()["access_token"]
-    return {"Authorization": "Bearer " + token}
+    changed = client.post(
+        "/api/auth/change-password",
+        headers={"Authorization": "Bearer " + token},
+        json={"current_password": temporary, "new_password": "Password123!"},
+    )
+    assert changed.status_code == 200, changed.text
+    return {"Authorization": "Bearer " + changed.json()["access_token"]}

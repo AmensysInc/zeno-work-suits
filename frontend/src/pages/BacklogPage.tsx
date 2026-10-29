@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Card, Checkbox, Tabs, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { useData, useIssues } from '../hooks/data';
+import { useCanLead, useData, useIssues } from '../hooks/data';
 import type { Project, Sprint } from '../types';
 import { PageHeader, State } from '../components/ui/shared';
 import { Button, LinkButton } from '../components/ui/button';
@@ -36,6 +36,7 @@ export default function BacklogPage() {
     sprint?: Sprint;
   } | null>(null);
   const kanban = project.data?.board_type === 'KANBAN';
+  const canLead = useCanLead(pid);
   const all = sprints.data ?? [];
   const openSprints = all
     .filter((s) => s.status !== 'COMPLETED')
@@ -68,7 +69,7 @@ export default function BacklogPage() {
             : 'Plan sprints from a single ranked list of epics, stories, tasks and bugs.'
         }
       >
-        {!kanban && (
+        {!kanban && canLead && (
           <Button
             variant="outline"
             icon={<PlusOutlined />}
@@ -160,13 +161,24 @@ export default function BacklogPage() {
                     )}
                   </p>
                   <div className="actions">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setModal({ kind: 'edit', sprint: s })}
-                    >
-                      Edit
-                    </Button>
-                    {s.status === 'PLANNED' ? (
+                    {canLead && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => setModal({ kind: 'edit', sprint: s })}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {!canLead ? (
+                      s.status !== 'PLANNED' && (
+                        <LinkButton
+                          variant="outline"
+                          to={`/projects/${pid}/board`}
+                        >
+                          Board
+                        </LinkButton>
+                      )
+                    ) : s.status === 'PLANNED' ? (
                       <Button
                         variant="outline"
                         onClick={() => setModal({ kind: 'start', sprint: s })}

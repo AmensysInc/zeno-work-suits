@@ -48,7 +48,9 @@ export default function ChangePasswordPage() {
           onSubmit={handleSubmit(async ({ current_password, new_password }) => {
             setError('');
             try {
-              await api.post('/auth/change-password', { current_password, new_password });
+              const r = await api.post('/auth/change-password', { current_password, new_password });
+              // A new password signs out older tokens, including this one.
+              localStorage.setItem('trackly_token', r.data.access_token);
               await qc.invalidateQueries();
               toast.success('Password updated');
               nav('/dashboard');

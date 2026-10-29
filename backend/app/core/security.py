@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 import jwt
 from passlib.context import CryptContext
@@ -14,9 +15,18 @@ def verify_password(password: str, hashed: str):
     return pwd.verify(password, hashed)
 
 
-def create_token(user_id: int):
+def password_version(password_hash: str):
+    """Changes whenever the password does, so older tokens stop working."""
+    return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
+
+
+def create_token(user):
     return jwt.encode(
-        {"sub": str(user_id), "exp": datetime.now(timezone.utc) + timedelta(hours=8)},
+        {
+            "sub": str(user.id),
+            "pv": password_version(user.password_hash),
+            "exp": datetime.now(timezone.utc) + timedelta(hours=8),
+        },
         settings.jwt_secret,
         algorithm="HS256",
     )

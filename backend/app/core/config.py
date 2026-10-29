@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     mail_from: str = ""
     mail_from_name: str = "Zeno TeamSuite"
     github_token: str = ""
+    # Optional: GitHub users or organizations whose repositories may be linked,
+    # e.g. ["AmensysInc"]. Empty allows any repository the token can reach.
+    github_allowed_owners: list[str] = []
     openai_api_key: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

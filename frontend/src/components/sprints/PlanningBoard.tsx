@@ -28,7 +28,7 @@ import { Button } from '../ui/button';
 import { Select } from '../ui/form';
 import { confirm } from '../ui/confirm';
 import { useMoveIssue } from '../../hooks/useMoveIssue';
-import { useSave } from '../../hooks/data';
+import { useCanLead, useSave } from '../../hooks/data';
 import { useCreateIssue } from '../layout/AppShell';
 
 export interface Selection {
@@ -55,6 +55,7 @@ function Item({
     useSortable({ id: issue.id, disabled });
   const edit = useCreateIssue();
   const del = useSave(`/issues/${issue.id}`, 'delete', 'Issue deleted');
+  const canLead = useCanLead(issue.project_id);
   return (
     <div
       className="planning-item"
@@ -138,20 +139,25 @@ function Item({
           title="Edit"
           onClick={() => edit(issue)}
         />
-        <Button
-          variant="ghost"
-          size="small"
-          icon={<DeleteOutlined />}
-          aria-label={`Delete ${issue.issue_key}`}
-          title="Delete"
-          disabled={del.isPending}
-          onClick={async () => {
-            if (
-              await confirm(`Delete ${issue.issue_key}?`, { okText: 'Delete' })
-            )
-              del.mutate({});
-          }}
-        />
+        {canLead && (
+          <Button
+            variant="ghost"
+            size="small"
+            icon={<DeleteOutlined />}
+            aria-label={`Delete ${issue.issue_key}`}
+            title="Delete"
+            disabled={del.isPending}
+            onClick={async () => {
+              if (
+                await confirm(
+                  `Delete ${issue.issue_key}? Its subtasks, test cases and their run history are deleted too.`,
+                  { okText: 'Delete' },
+                )
+              )
+                del.mutate({});
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -55,6 +55,8 @@ class IssueOut(IssueIn):
     updated_at: datetime
     assignee: UserOut | None
     reporter: UserOut
+    # When a Done issue was last moved to Done; set by the issue list only.
+    resolved_at: datetime | None = None
 
 
 class StatusIn(BaseModel):

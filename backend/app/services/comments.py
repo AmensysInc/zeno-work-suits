@@ -1,12 +1,15 @@
 from fastapi import HTTPException
 from app.models import Comment
-from app.services.access import issue_access, child_access
+from app.services.access import issue_access, child_access, can_lead
 from app.services.activity import record
 
 
-def owned(db, id, actor):
+def owned(db, id, actor, moderate=False):
+    """The person's own comment; with moderate, a lead may also take others'."""
     comment = child_access(db, Comment, id, actor)
-    if comment.user_id != actor.id:
+    if comment.user_id != actor.id and not (
+        moderate and can_lead(db, actor, issue_access(db, comment.issue_id, actor).project)
+    ):
         raise HTTPException(403, "You can only edit or delete your own comments")
     return comment
 

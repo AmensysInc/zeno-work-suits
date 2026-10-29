@@ -7,8 +7,21 @@ from app.models import (
     SharedStep,
     AcceptanceCriterion,
 )
-from app.services.access import project_access, issue_access, child_access
+from app.services.access import (
+    project_access,
+    issue_access,
+    child_access,
+    require_lead,
+)
 from app.services.activity import record
+
+
+def delete(db, actor, id):
+    item = child_access(db, TestCase, id, actor)
+    require_lead(db, actor, db.get(Project, item.project_id))
+    record(db, actor, item.project_id, item.issue_id, "deleted test case", new=item.test_case_key)
+    db.delete(item)
+    db.commit()
 
 
 def build_steps(db, project_id, steps):
@@ -55,15 +68,14 @@ def save(db, actor, data, id=None):
             422, "Test cases must link to a user story in the same project"
         )
     project = project_access(db, data.project_id, actor)
-    values = data.model_dump(exclude={"steps", "criterion_ids"})
+    # The result comes from test runs, never from the editor.
+    values = data.model_dump(exclude={"steps", "criterion_ids", "status"})
     steps = build_steps(db, project.id, data.steps)
     criteria = covered_criteria(db, story, data.criterion_ids)
     if id:
         item = child_access(db, TestCase, id, actor)
         if item.project_id != data.project_id or item.issue_id != data.issue_id:
             raise HTTPException(422, "A saved test case cannot change its linked story")
-        # The result comes from test runs, not from the editor.
-        values.pop("status")
         for k, v in values.items():
             setattr(item, k, v)
         item.steps.clear()
@@ -92,7 +104,9 @@ def save(db, actor, data, id=None):
 
 
 def status(db, actor, id, value):
+    """A lead's manual override of the result that test runs normally set."""
     item = child_access(db, TestCase, id, actor)
+    require_lead(db, actor, db.get(Project, item.project_id))
     record(
         db,
         actor,

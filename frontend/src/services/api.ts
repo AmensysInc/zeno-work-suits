@@ -29,6 +29,14 @@ api.interceptors.response.use(
       clearSession();
       window.location.assign('/login');
     }
+    // Still on an admin-issued temporary password: the server allows nothing else.
+    if (
+      error.response?.status === 403 &&
+      error.response.data?.detail === 'Choose a new password before continuing' &&
+      window.location.pathname !== '/change-password'
+    ) {
+      window.location.assign('/change-password');
+    }
     return Promise.reject(error);
   },
 );

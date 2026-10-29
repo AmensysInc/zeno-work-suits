@@ -1,11 +1,19 @@
 import { useState } from 'react';
 import { Avatar, Card, Input, Typography } from 'antd';
-import { useData, useMe, useSave } from '../../hooks/data';
+import { useCanLead, useData, useMe, useSave } from '../../hooks/data';
 import type { Comment } from '../../types';
 import { State } from '../ui/shared';
 import { Button } from '../ui/button';
 import { confirm } from '../ui/confirm';
-function CommentRow({ comment, own }: { comment: Comment; own: boolean }) {
+function CommentRow({
+  comment,
+  own,
+  moderate,
+}: {
+  comment: Comment;
+  own: boolean;
+  moderate: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(comment.body);
   const save = useSave(`/comments/${comment.id}`, 'put', 'Comment updated');
@@ -56,15 +64,17 @@ function CommentRow({ comment, own }: { comment: Comment; own: boolean }) {
         ) : (
           <p className="prewrap">{comment.body}</p>
         )}
-        {own && !editing && (
+        {(own || moderate) && !editing && (
           <div className="actions">
-            <Button
-              variant="ghost"
-              size="small"
-              onClick={() => setEditing(true)}
-            >
-              Edit
-            </Button>
+            {own && (
+              <Button
+                variant="ghost"
+                size="small"
+                onClick={() => setEditing(true)}
+              >
+                Edit
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="small"
@@ -81,15 +91,27 @@ function CommentRow({ comment, own }: { comment: Comment; own: boolean }) {
     </article>
   );
 }
-export default function Comments({ issueId }: { issueId: number }) {
+export default function Comments({
+  issueId,
+  projectId,
+}: {
+  issueId: number;
+  projectId: number;
+}) {
   const query = useData<Comment[]>(`/issues/${issueId}/comments`);
   const me = useMe();
+  const canLead = useCanLead(projectId);
   const save = useSave(`/issues/${issueId}/comments`, 'post', 'Comment added');
   return (
     <Card className="card" title="Comments">
       <State loading={query.isLoading} error={query.error} />
       {query.data?.map((c) => (
-        <CommentRow key={c.id} comment={c} own={c.user_id === me.data?.id} />
+        <CommentRow
+          key={c.id}
+          comment={c}
+          own={c.user_id === me.data?.id}
+          moderate={canLead}
+        />
       ))}
       <form
         onSubmit={async (e) => {

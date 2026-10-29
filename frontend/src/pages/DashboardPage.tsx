@@ -31,7 +31,7 @@ function weekStart(date: Date) {
   return d;
 }
 
-/** Items created and finished per week; "finished" uses a done item's last update. */
+/** Items created and finished per week; "finished" is when an item last moved to Done, as in Reports. */
 function weekly(issues: Issue[]) {
   const first = weekStart(new Date(Date.now() - (WEEKS - 1) * 7 * DAY));
   const weeks = Array.from({ length: WEEKS }, (_, i) => {
@@ -55,7 +55,7 @@ function weekly(issues: Issue[]) {
     const created = slot(issue.created_at);
     if (created) created.created += 1;
     if (issue.status === 'DONE') {
-      const done = slot(issue.updated_at);
+      const done = slot(issue.resolved_at ?? issue.updated_at);
       if (done) done.completed += 1;
     }
   }

@@ -1,12 +1,12 @@
 from fastapi import HTTPException
 from sqlalchemy import select
 from app.models import Sprint, Issue
-from app.services.access import project_access, child_access
+from app.services.access import project_access, child_access, require_lead
 from app.services.activity import record
 
 
 def create(db, actor, project_id, data):
-    project_access(db, project_id, actor)
+    require_lead(db, actor, project_access(db, project_id, actor))
     sprint = Sprint(project_id=project_id, **data.model_dump())
     db.add(sprint)
     db.commit()
@@ -15,6 +15,7 @@ def create(db, actor, project_id, data):
 
 def edit(db, actor, id, data):
     sprint = child_access(db, Sprint, id, actor)
+    require_lead(db, actor, sprint.project)
     if sprint.status == "COMPLETED":
         raise HTTPException(409, "Completed sprints cannot be edited")
     for k, v in data.model_dump().items():
@@ -25,7 +26,7 @@ def edit(db, actor, id, data):
 
 def delete(db, actor, id):
     sprint = child_access(db, Sprint, id, actor)
-    project_access(db, sprint.project_id, actor, lock=True)
+    require_lead(db, actor, project_access(db, sprint.project_id, actor, lock=True))
     db.refresh(sprint)
     if sprint.status != "PLANNED":
         raise HTTPException(409, "Only a planned sprint can be deleted")
@@ -40,7 +41,7 @@ def delete(db, actor, id):
 
 def transition(db, actor, id, target, move_to=None):
     sprint = child_access(db, Sprint, id, actor)
-    project_access(db, sprint.project_id, actor, lock=True)
+    require_lead(db, actor, project_access(db, sprint.project_id, actor, lock=True))
     db.refresh(sprint)
     next_sprint = None
     if move_to is not None:

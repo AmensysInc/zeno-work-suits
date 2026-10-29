@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Card, Table, Tag, Typography } from 'antd';
 import { BugOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useData, useIssues, useSave } from '../../hooks/data';
+import { useCanLead, useData, useIssues, useMe, useSave } from '../../hooks/data';
 import type { Execution, Sprint, TestCase } from '../../types';
 import { bugFromRun, fullName } from '../../lib/qa';
 import { Badge, State } from '../ui/shared';
@@ -11,8 +11,9 @@ import { confirm } from '../ui/confirm';
 import { useCreateIssue } from '../layout/AppShell';
 import RunTestModal from './RunTestModal';
 
-function DeleteRun({ id }: { id: number }) {
+function DeleteRun({ id, allowed }: { id: number; allowed: boolean }) {
   const del = useSave(`/test-executions/${id}`, 'delete', 'Test run deleted');
+  if (!allowed) return null;
   return (
     <Button
       variant="ghost"
@@ -38,6 +39,8 @@ export default function ExecutionHistory({
   testCase: TestCase;
 }) {
   const runs = useData<Execution[]>(`/test-executions?test_case_id=${tc.id}`);
+  const me = useMe();
+  const canLead = useCanLead(tc.project_id);
   const sprints = useData<Sprint[]>(`/projects/${tc.project_id}/sprints`);
   const issues = useIssues(tc.project_id);
   const create = useCreateIssue();
@@ -147,7 +150,12 @@ export default function ExecutionHistory({
             },
             {
               key: 'delete',
-              render: (_, run) => <DeleteRun id={run.id} />,
+              render: (_, run) => (
+                <DeleteRun
+                  id={run.id}
+                  allowed={canLead || run.tester_id === me.data?.id}
+                />
+              ),
             },
           ]}
         />

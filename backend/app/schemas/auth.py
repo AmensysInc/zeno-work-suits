@@ -44,6 +44,11 @@ class UserOut(BaseModel):
     must_change_password: bool = False
 
 
+class PasswordChanged(UserOut):
+    # A new password signs out older tokens, including the one that changed it.
+    access_token: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

@@ -6,7 +6,7 @@ import {
   DeleteOutlined,
   EditOutlined,
 } from '@ant-design/icons';
-import { useData, useSave } from '../hooks/data';
+import { useCanLead, useData, useSave } from '../hooks/data';
 import type { Criterion, Issue, TestCase } from '../types';
 import { label } from '../types';
 import { PageHeader, State, Badge } from '../components/ui/shared';
@@ -31,6 +31,7 @@ export default function TestCaseDetailsPage() {
     'Test case deleted',
   );
   const nav = useNavigate();
+  const canLead = useCanLead(tc?.project_id);
   const [editing, setEditing] = useState(false);
   const [running, setRunning] = useState(false);
   usePageProject(tc?.project_id);
@@ -57,6 +58,7 @@ export default function TestCaseDetailsPage() {
         >
           {editing ? 'Close editor' : 'Edit'}
         </Button>
+        {canLead && (
         <Button
           variant="destructive"
           icon={<DeleteOutlined />}
@@ -78,6 +80,7 @@ export default function TestCaseDetailsPage() {
         >
           Delete
         </Button>
+        )}
       </PageHeader>
       {editing ? (
         <TestCaseForm

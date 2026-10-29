@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy import select, or_
 from app.models import Project, Issue, User
+from app.models.project import project_members
 
 
 def is_admin(actor):
@@ -10,6 +11,26 @@ def is_admin(actor):
 def can_manage_project(actor, project):
     """Admins manage every project. Managers manage the projects they own."""
     return is_admin(actor) or (actor.role == "MANAGER" and project.owner_id == actor.id)
+
+
+def can_lead(db, actor, project):
+    """Admins, the owning manager and the project's leads run sprints and delete work."""
+    if can_manage_project(actor, project):
+        return True
+    role = db.scalar(
+        select(project_members.c.role).where(
+            project_members.c.project_id == project.id,
+            project_members.c.user_id == actor.id,
+        )
+    )
+    return role == "LEAD"
+
+
+def require_lead(db, actor, project):
+    if not can_lead(db, actor, project):
+        raise HTTPException(
+            403, "Only a project lead, the owning manager or an admin can do this"
+        )
 
 
 def visible_projects(actor):

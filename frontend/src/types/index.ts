@@ -33,6 +33,13 @@ export const canManageProject = (
   !!me &&
   (me.role === 'ADMIN' ||
     (me.role === 'MANAGER' && me.id === project.owner_id));
+/** Who runs sprints and deletes work: managers of the project and its leads. */
+export const canLeadProject = (
+  me: Pick<User, 'id' | 'role'> | undefined,
+  project: Pick<Project, 'owner_id' | 'team'>,
+) =>
+  canManageProject(me, project) ||
+  project.team.some((m) => m.user.id === me?.id && m.role === 'LEAD');
 export const projectRoles = [
   'LEAD',
   'DEVELOPER',
@@ -215,6 +222,8 @@ export interface Issue {
   related_execution_id: number | null;
   assignee: User | null;
   reporter: User;
+  /** When a Done item was last moved to Done (issue lists only). */
+  resolved_at?: string | null;
 }
 export interface Sprint {
   id: number;
