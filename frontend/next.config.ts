@@ -8,6 +8,8 @@ const config: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  turbopack: { root: __dirname },
+  agentRules: false,
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${api}/api/:path*` }];
   },

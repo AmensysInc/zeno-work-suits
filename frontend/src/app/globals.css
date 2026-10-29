@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* dark: utilities follow the app's theme class, not the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* Zeno TeamSuite v2 tokens. Light by default; `.dark` on <html> switches theme. */
 :root {

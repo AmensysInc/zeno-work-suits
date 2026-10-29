@@ -1,6 +1,4 @@
 node_modules/
 .next/
-legacy/
-legacy-config/
 .env
 *.log

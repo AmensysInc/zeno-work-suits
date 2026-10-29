@@ -10,3 +10,4 @@ __pycache__/
 tsconfig.tsbuildinfo
 .next/
 next-env.d.ts
+*.tsbuildinfo
