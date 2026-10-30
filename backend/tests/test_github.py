@@ -306,3 +306,98 @@ def test_commits(client, auth, gh):
         ).status_code
         == 422
     )
+
+
+API = {
+    "full_name": "acme/hr-api",
+    "html_url": "https://github.com/acme/hr-api",
+    "description": "HR API",
+    "private": True,
+    "default_branch": "develop",
+}
+
+
+def branch_list(name):
+    return [{"name": name, "commit": {"sha": f"{name}-sha"}, "protected": False}]
+
+
+def test_a_project_links_several_repositories(client, auth, gh):
+    p = client.post(
+        "/api/projects", headers=auth, json={"key": "MR", "name": "Multi"}
+    ).json()
+    url = f"/api/github/projects/{p['id']}"
+    gh.on("GET", "/repos/acme/hr-portal", body=REPO)
+    gh.on("GET", "/repos/acme/hr-api", body=API)
+    for name in ("acme/hr-portal", "acme/hr-api", "ACME/HR-API"):
+        linked = client.put(f"{url}/repository", headers=auth, json={"full_name": name})
+        assert linked.status_code == 200, linked.text
+    body = linked.json()
+    # Linking adds; the same repository twice (any case) is kept once.
+    assert [r["full_name"] for r in body["repositories"]] == [
+        "acme/hr-portal",
+        "acme/hr-api",
+    ]
+    assert body["github_repo"] == "https://github.com/acme/hr-portal"
+    gh.on("GET", "/user/repos", body=[REPO, API])
+    assert [
+        r["linked_projects"]
+        for r in client.get("/api/github/repos", headers=auth).json()
+    ] == [["Multi"], ["Multi"]]
+
+    # Each repository is managed on its own; the first is the default.
+    gh.on("GET", "/repos/acme/hr-portal/branches", body=branch_list("main"))
+    gh.on("GET", "/repos/acme/hr-api/branches", body=branch_list("develop"))
+    first = client.get(f"{url}/branches", headers=auth).json()
+    second = client.get(f"{url}/branches?repo=acme/hr-api", headers=auth).json()
+    assert (first["repository"], first["branches"][0]["name"]) == (
+        "acme/hr-portal",
+        "main",
+    )
+    assert (second["repository"], second["default_branch"]) == (
+        "acme/hr-api",
+        "develop",
+    )
+    gh.on("GET", "/repos/acme/hr-api/pulls", body=[])
+    assert client.get(f"{url}/pulls?repo=acme/hr-api", headers=auth).json() == []
+    assert gh.calls[-1][1] == "/repos/acme/hr-api/pulls"
+    # A repository of another project cannot be reached through this one.
+    assert (
+        client.get(f"{url}/branches?repo=acme/other", headers=auth).status_code == 404
+    )
+
+    # With several linked, unlinking names one; the rest stay.
+    assert client.delete(f"{url}/repository", headers=auth).status_code == 422
+    left = client.delete(f"{url}/repository?repo=acme/hr-portal", headers=auth).json()
+    assert [r["full_name"] for r in left["repositories"]] == ["acme/hr-api"]
+    assert left["github_repo"] == "https://github.com/acme/hr-api"
+    none = client.delete(f"{url}/repository", headers=auth).json()
+    assert (none["repositories"], none["github_repo"]) == ([], "")
+
+
+def test_project_form_repository_is_added_not_replaced(client, auth):
+    p = client.post(
+        "/api/projects",
+        headers=auth,
+        json={
+            "key": "FRM",
+            "name": "Form",
+            "github_repo": "https://github.com/acme/hr-portal",
+        },
+    ).json()
+    assert [r["full_name"] for r in p["repositories"]] == ["acme/hr-portal"]
+    updated = client.put(
+        f"/api/projects/{p['id']}",
+        headers=auth,
+        json={"name": "Form", "github_repo": "https://github.com/acme/hr-api"},
+    ).json()
+    assert [r["full_name"] for r in updated["repositories"]] == [
+        "acme/hr-portal",
+        "acme/hr-api",
+    ]
+    # A blank field leaves the linked repositories alone.
+    kept = client.put(
+        f"/api/projects/{p['id']}",
+        headers=auth,
+        json={"name": "Form", "github_repo": ""},
+    ).json()
+    assert len(kept["repositories"]) == 2

@@ -57,11 +57,11 @@ export default function ProjectPage() {
                 <h1 className="text-[22px] font-semibold tracking-tight">{p.name}</h1>
                 <Badge value={p.status} />
                 <Tag>{kanban ? 'Kanban' : 'Scrum'}</Tag>
-                {p.github_repo && (
-                  <a href={p.github_repo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-ink-2 hover:text-ink">
-                    <GithubIcon className="size-3.5" /> Repository ↗
+                {p.repositories.map((r) => (
+                  <a key={r.full_name} href={r.html_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-ink-2 hover:text-ink">
+                    <GithubIcon className="size-3.5" /> {p.repositories.length > 1 ? r.full_name : 'Repository'} ↗
                   </a>
-                )}
+                ))}
               </div>
               <p className="text-[13px] text-ink-2">{p.description || 'No description yet.'}</p>
             </div>

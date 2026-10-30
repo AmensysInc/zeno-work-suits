@@ -30,7 +30,7 @@ export default function ProjectsPage() {
   const projects = (query.data ?? []).filter(
     (p) =>
       !q ||
-      [p.name, p.key, p.description, p.status, p.github_repo, p.team.map((m) => `${m.user.first_name} ${m.user.last_name} ${m.user.email}`).join(' ')]
+      [p.name, p.key, p.description, p.status, p.repositories.map((r) => r.full_name).join(' '), p.team.map((m) => `${m.user.first_name} ${m.user.last_name} ${m.user.email}`).join(' ')]
         .filter(Boolean)
         .some((v) => v?.toLowerCase().includes(q)),
   );

@@ -4,7 +4,7 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
 from app.core.config import settings
-from app.models import Project
+from app.models import Project, ProjectRepository
 from app.services.access import (
     can_lead,
     can_manage_project,
@@ -78,12 +78,39 @@ def can_merge(db, actor, project):
     return can_lead(db, actor, project)
 
 
-def linked_repo(db, project_id, actor):
-    project = project_access(db, project_id, actor)
-    name = repo_name(project.github_repo)
-    if not name:
+def pick_repo(project, repo=None):
+    """One of the project's linked repositories: `repo` ("owner/name"), else the first."""
+    if not project.repositories:
         raise HTTPException(409, "This project has no linked GitHub repository")
-    return project, name
+    if not repo:
+        return project.repositories[0].full_name
+    for linked in project.repositories:
+        if linked.full_name.lower() == repo.lower():
+            return linked.full_name
+    raise HTTPException(404, "That repository is not linked to this project")
+
+
+def linked_repo(db, project_id, actor, repo=None):
+    project = project_access(db, project_id, actor)
+    return project, pick_repo(project, repo)
+
+
+def sync_primary(project):
+    """Keeps the legacy single-repository field pointing at the first linked one."""
+    project.github_repo = (
+        project.repositories[0].html_url if project.repositories else ""
+    )
+
+
+def add_repository(project, full_name, html_url):
+    """Links a repository unless the project already has it; returns whether it was added."""
+    if any(r.full_name.lower() == full_name.lower() for r in project.repositories):
+        return False
+    project.repositories.append(
+        ProjectRepository(full_name=full_name, html_url=html_url)
+    )
+    sync_primary(project)
+    return True
 
 
 def _owner_allowed(full_name):
@@ -96,9 +123,10 @@ def _taken(db, actor):
     if is_admin(actor):
         return set()
     return {
-        name.lower()
-        for p in db.scalars(select(Project).where(Project.github_repo != ""))
-        if (name := repo_name(p.github_repo)) and not can_manage_project(actor, p)
+        r.full_name.lower()
+        for p in db.scalars(select(Project).where(Project.repositories.any()))
+        if not can_manage_project(actor, p)
+        for r in p.repositories
     }
 
 
@@ -106,10 +134,9 @@ def list_repos(db, actor):
     if actor.role not in ("ADMIN", "MANAGER"):
         raise HTTPException(403, "Only an admin or a manager can link repositories")
     linked = {}
-    for p in db.scalars(visible_projects(actor).where(Project.github_repo != "")):
-        name = repo_name(p.github_repo)
-        if name:
-            linked.setdefault(name.lower(), []).append(p.name)
+    for p in db.scalars(visible_projects(actor).where(Project.repositories.any())):
+        for r in p.repositories:
+            linked.setdefault(r.full_name.lower(), []).append(p.name)
     taken = _taken(db, actor)
     repos = []
     for page in range(1, MAX_REPO_PAGES + 1):
@@ -147,23 +174,31 @@ def link(db, project_id, full_name, actor):
             403,
             "This repository belongs to another team's project; ask an admin to link it",
         )
+    if any(r.full_name.lower() == full_name.lower() for r in project.repositories):
+        return project  # Already linked; nothing to ask GitHub.
     repo = call("GET", f"/repos/{full_name}")
-    project.github_repo = repo["html_url"]
+    # Linking adds to the project's repositories; the ones already there stay.
+    add_repository(project, repo["full_name"], repo["html_url"])
     db.commit()
     db.refresh(project)
     return project
 
 
-def unlink(db, project_id, actor):
+def unlink(db, project_id, repo, actor):
+    """Removes one linked repository; `repo` may be left out when only one is linked."""
     project = project_access(db, project_id, actor, owner=True)
-    project.github_repo = ""
+    if not repo and len(project.repositories) > 1:
+        raise HTTPException(422, "Choose which repository to unlink")
+    name = pick_repo(project, repo)
+    project.repositories = [r for r in project.repositories if r.full_name != name]
+    sync_primary(project)
     db.commit()
     db.refresh(project)
     return project
 
 
-def branches(db, project_id, actor):
-    project, name = linked_repo(db, project_id, actor)
+def branches(db, project_id, actor, repo=None):
+    project, name = linked_repo(db, project_id, actor, repo)
     repo = call("GET", f"/repos/{name}")
     items = call("GET", f"/repos/{name}/branches", params={"per_page": 100})
     return {
@@ -182,8 +217,8 @@ def branches(db, project_id, actor):
     }
 
 
-def create_branch(db, project_id, data, actor):
-    _, name = linked_repo(db, project_id, actor)
+def create_branch(db, project_id, data, actor, repo=None):
+    _, name = linked_repo(db, project_id, actor, repo)
     base = call("GET", f"/repos/{name}/git/ref/heads/{quote(data.from_branch)}")
     sha = base["object"]["sha"]
     call(
@@ -209,8 +244,8 @@ def _pull(p):
     }
 
 
-def pulls(db, project_id, state, actor):
-    _, name = linked_repo(db, project_id, actor)
+def pulls(db, project_id, state, actor, repo=None):
+    _, name = linked_repo(db, project_id, actor, repo)
     items = call(
         "GET",
         f"/repos/{name}/pulls",
@@ -236,17 +271,17 @@ def _commit(c):
     }
 
 
-def commits(db, project_id, branch, actor):
+def commits(db, project_id, branch, actor, repo=None):
     """The newest commits on a branch, or on the default branch when none is given."""
-    _, name = linked_repo(db, project_id, actor)
+    _, name = linked_repo(db, project_id, actor, repo)
     params = {"per_page": 50}
     if branch:
         params["sha"] = branch
     return [_commit(c) for c in call("GET", f"/repos/{name}/commits", params=params)]
 
 
-def create_pull(db, project_id, data, actor):
-    _, name = linked_repo(db, project_id, actor)
+def create_pull(db, project_id, data, actor, repo=None):
+    _, name = linked_repo(db, project_id, actor, repo)
     if data.head == data.base:
         raise HTTPException(422, "Choose two different branches")
     pull = call(
@@ -263,8 +298,8 @@ def create_pull(db, project_id, data, actor):
     return _pull(pull)
 
 
-def merge(db, project_id, number, data, actor):
-    project, name = linked_repo(db, project_id, actor)
+def merge(db, project_id, number, data, actor, repo=None):
+    project, name = linked_repo(db, project_id, actor, repo)
     if not can_merge(db, actor, project):
         raise HTTPException(
             403, "Only an admin, the owning manager or a project lead can merge"
