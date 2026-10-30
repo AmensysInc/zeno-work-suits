@@ -76,6 +76,10 @@ class GeneratedStory(BaseModel):
     story_points: int = Field(default=3, ge=0, le=100)
     acceptance_criteria: list[str] = Field(default_factory=list, max_length=12)
     test_cases: list[GeneratedTestCase] = Field(default_factory=list, max_length=12)
+    # Files the story was drafted from, shown for review and kept in the description.
+    source_files: list[str] = Field(default_factory=list, max_length=20)
+    # Set when the tests belong to a story already in the project.
+    existing_issue_id: int | None = None
 
 
 class GeneratedDraft(BaseModel):
@@ -88,7 +92,7 @@ class GeneratedDraft(BaseModel):
     source_ref: str = ""
     output_type: OutputType
     coverage: list[CoverageType]
-    user_stories: list[GeneratedStory] = Field(default_factory=list, max_length=20)
+    user_stories: list[GeneratedStory] = Field(default_factory=list, max_length=40)
     notes: list[str] = Field(default_factory=list)
 
 
@@ -98,6 +102,7 @@ class SaveGeneratedIn(GeneratedDraft):
 
 class SaveGeneratedOut(BaseModel):
     issue_ids: list[int]
+    updated_issue_ids: list[int] = []
     test_case_ids: list[int]
 
 

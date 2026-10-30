@@ -378,7 +378,7 @@ def test_fallback_says_why(client, auth, monkeypatch):
 
     monkeypatch.setattr("app.services.ai_generator.httpx.post", timeout)
     body = generate(client, auth, project).json()
-    assert any("within 60 seconds" in note for note in body["notes"])
+    assert any("within 100 seconds" in note for note in body["notes"])
 
 
 def test_items_follow_their_own_branch(client, auth, monkeypatch):
@@ -448,3 +448,210 @@ def test_pull_module_picks_folder_with_most_changes(client, auth, monkeypatch):
     # Changes in a folder the default branch does not have yet.
     r = client.get(f"{base}/9/module", headers=auth)
     assert r.json() == {"module_path": "", "changed_files": 1, "matched_files": 0}
+
+
+def big_repo_github(files):
+    """A repository whose tree is `files` (path -> source), every file readable."""
+    repo = "/repos/acme/hr-portal"
+    tree = {
+        "tree": [
+            {"path": path, "type": "blob", "size": len(body)}
+            for path, body in files.items()
+        ]
+    }
+    reads = []
+
+    def call(method, path, **kwargs):
+        if path == repo:
+            return {
+                "default_branch": "main",
+                "html_url": "https://github.com/acme/hr-portal",
+            }
+        if path == f"{repo}/git/ref/heads/main":
+            return {"object": {"sha": "abc123def456"}}
+        if path.startswith(f"{repo}/git/trees/"):
+            return tree
+        name = path.removeprefix(f"{repo}/contents/")
+        if name in files:
+            reads.append(name)
+            return {
+                "encoding": "base64",
+                "content": base64.b64encode(files[name].encode()).decode(),
+            }
+        raise AssertionError(f"unexpected GitHub call {method} {path}")
+
+    return call, reads
+
+
+def openai_returning(answer_for):
+    """Fake OpenAI: `answer_for(prompt)` builds the model's answer from the request."""
+    prompts = []
+
+    def post(url, **kwargs):
+        prompt = json.loads(kwargs["json"]["messages"][1]["content"])
+        prompts.append(prompt)
+        content = json.dumps(answer_for(prompt))
+        return FakeResponse(200, {"choices": [{"message": {"content": content}}]})
+
+    return post, prompts
+
+
+def test_whole_repository_is_read_in_parts_across_every_area(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
+    body = "x = 1\n" * 2000  # ~12k characters per file
+    files = {
+        f"src/{area}/file{i}.py": body
+        for area in ("billing", "leave", "users", "auth")
+        for i in range(12)
+    }
+    files["tests/test_leave.py"] = body
+    call, reads = big_repo_github(files)
+    monkeypatch.setattr(github, "call", call)
+
+    def answer(prompt):
+        first = prompt["sources"][0]["path"]
+        return {
+            "user_stories": [
+                {
+                    "title": f"Capability from {first}",
+                    "source_files": [first, "made/up/file.py"],
+                    "acceptance_criteria": ["It works"],
+                    "test_cases": [{"title": "Positive: works", "covers": [0]}],
+                },
+                {"title": "Shared story", "acceptance_criteria": ["Same"]},
+            ]
+        }
+
+    post, prompts = openai_returning(answer)
+    monkeypatch.setattr("app.services.ai_generator.httpx.post", post)
+    draft = generate(client, auth, project, output_type="BOTH").json()
+    # Several parts, each covering real files; every area is read, product code first.
+    assert len(prompts) > 1
+    assert {path.split("/")[1] for path in reads} == {
+        "billing",
+        "leave",
+        "users",
+        "auth",
+    }
+    assert "tests/test_leave.py" not in reads
+    assert all(
+        p["outline"] and p["part"].endswith(f"of {len(prompts)}") for p in prompts
+    )
+    titles = [s["title"] for s in draft["user_stories"]]
+    # The story repeated by every part appears once.
+    assert titles.count("Shared story") == 1
+    assert len(titles) == len(prompts) + 1
+    # Stories cite only files that were really sent.
+    assert all(
+        "made/up/file.py" not in s["source_files"] for s in draft["user_stories"]
+    )
+    assert draft["user_stories"][0]["source_files"]
+    assert any("parts" in note for note in draft["notes"])
+
+
+def test_stories_only_drops_tests_and_asks_for_none(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
+    post, prompts = openai_returning(
+        lambda prompt: {
+            "user_stories": [
+                {
+                    "title": "Restrict roles",
+                    "source_files": ["app/users.py"],
+                    "acceptance_criteria": ["Unknown roles are rejected"],
+                    "test_cases": [{"title": "Negative: unknown role", "covers": [0]}],
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr("app.services.ai_generator.httpx.post", post)
+    draft = generate(client, auth, project, output_type="USER_STORIES").json()
+    [story] = draft["user_stories"]
+    assert story["test_cases"] == []
+    assert story["source_files"] == ["app/users.py"]
+    assert "test_cases" not in json.dumps(prompts[0]["schema"])
+    saved = client.post("/api/ai-generator/save", headers=auth, json=draft).json()
+    assert saved["test_case_ids"] == []
+    issue = client.get(f"/api/issues/{saved['issue_ids'][0]}", headers=auth).json()
+    assert "Generated from: app/users.py" in issue["description"]
+
+
+def test_test_cases_join_existing_stories(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
+    story = client.post(
+        "/api/issues",
+        headers=auth,
+        json={
+            "project_id": project["id"],
+            "issue_type": "STORY",
+            "summary": "Manage roles",
+        },
+    ).json()
+    for order, text in enumerate(
+        ["Admins can assign roles", "Unknown roles are rejected"]
+    ):
+        client.post(
+            f"/api/issues/{story['id']}/acceptance-criteria",
+            headers=auth,
+            json={"description": text, "order_index": order},
+        )
+
+    def answer(prompt):
+        [known] = prompt["existing_stories"]
+        assert known["acceptance_criteria"][1] == "Unknown roles are rejected"
+        return {
+            "user_stories": [
+                {
+                    "existing_story_id": known["id"],
+                    "title": "Renamed by the model",
+                    "test_cases": [
+                        {
+                            "title": "Negative: unknown role is rejected",
+                            "covers": [1],
+                            "steps": [
+                                {
+                                    "action": "Create a user with role Guest",
+                                    "expected_result": "unauthorized role",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                # A new story without tests is not what was asked for.
+                {"title": "Story without tests", "acceptance_criteria": ["x"]},
+                # An id from another project is ignored, so this becomes a new story.
+                {
+                    "existing_story_id": 999999,
+                    "title": "Audit log",
+                    "acceptance_criteria": ["Changes are logged"],
+                    "test_cases": [{"title": "Positive: logged", "covers": [0]}],
+                },
+            ]
+        }
+
+    post, _ = openai_returning(answer)
+    monkeypatch.setattr("app.services.ai_generator.httpx.post", post)
+    draft = generate(
+        client, auth, project, output_type="TEST_CASES", coverage=["NEGATIVE"]
+    ).json()
+    joined, new = draft["user_stories"]
+    assert (joined["existing_issue_id"], joined["title"]) == (
+        story["id"],
+        "Manage roles",
+    )
+    assert (new["existing_issue_id"], new["title"]) == (None, "Audit log")
+    saved = client.post("/api/ai-generator/save", headers=auth, json=draft).json()
+    # The existing story gains the test; only the unmatched one is created.
+    assert saved["updated_issue_ids"] == [story["id"]]
+    assert len(saved["issue_ids"]) == 1 and len(saved["test_case_ids"]) == 2
+    criteria = client.get(
+        f"/api/issues/{story['id']}/acceptance-criteria", headers=auth
+    ).json()
+    assert len(criteria) == 2  # no criteria were added to the existing story
+    test = client.get(
+        f"/api/test-cases/{saved['test_case_ids'][0]}", headers=auth
+    ).json()
+    assert test["issue_id"] == story["id"]
+    assert test["criterion_ids"] == [criteria[1]["id"]]

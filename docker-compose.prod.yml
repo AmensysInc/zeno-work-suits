@@ -31,13 +31,16 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-zenoworksuite}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-zenoworksuite}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-["https://zenoteamsuite.com","https://www.zenoteamsuite.com"]}
+      SONIOX_API_KEY: ${SONIOX_API_KEY:-}
       SONIX_API_KEY: ${SONIX_API_KEY:-}
+      SONIOX_MODEL: ${SONIOX_MODEL:-stt-async-v5}
       APP_URL: ${APP_URL:-https://zenoteamsuite.com}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_ALLOWED_OWNERS: ${GITHUB_ALLOWED_OWNERS:-[]}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     depends_on:
       db:
         condition: service_healthy

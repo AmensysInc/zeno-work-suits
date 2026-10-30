@@ -15,7 +15,7 @@ const config: NextConfig = {
   },
   experimental: {
     // AI drafts and GitHub calls can take up to a couple of minutes.
-    proxyTimeout: 180_000,
+    proxyTimeout: 300_000,
   },
 };
 

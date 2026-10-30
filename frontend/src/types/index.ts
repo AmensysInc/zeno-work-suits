@@ -159,6 +159,10 @@ export interface GeneratedStory {
   story_points: number;
   acceptance_criteria: string[];
   test_cases: GeneratedTestCase[];
+  /** Files the story was drafted from. */
+  source_files?: string[];
+  /** Set when the tests belong to a story already in the project. */
+  existing_issue_id?: number | null;
 }
 export interface GeneratedDraft {
   project_id: number;
