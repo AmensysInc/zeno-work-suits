@@ -33,7 +33,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-["https://zenoteamsuite.com","https://www.zenoteamsuite.com"]}
       SONIOX_API_KEY: ${SONIOX_API_KEY:-}
       SONIX_API_KEY: ${SONIX_API_KEY:-}
-      SONIOX_MODEL: ${SONIOX_MODEL:-stt-async-v5}
+      SONIOX_MODEL: ${SONIOX_MODEL:-stt-rt-v5}
       APP_URL: ${APP_URL:-https://zenoteamsuite.com}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}

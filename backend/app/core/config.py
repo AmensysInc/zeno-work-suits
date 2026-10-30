@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     # Voice agent transcription (Soniox). SONIX_API_KEY is the old name and still read.
     soniox_api_key: str = ""
     sonix_api_key: str = ""
-    soniox_model: str = "stt-async-v5"
+    # Soniox real-time model; language identification handles mixed-language speech.
+    soniox_model: str = "stt-rt-v5"
     # Public URL used in login emails.
     app_url: str = "https://zenoteamsuite.com"
     # Optional: when set, new users and password resets are emailed via SendGrid.

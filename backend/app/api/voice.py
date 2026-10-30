@@ -1,14 +1,25 @@
-import hashlib
-import hmac
-from urllib.parse import quote
+import re
 import httpx
-from fastapi import APIRouter, HTTPException, Query, UploadFile
-from app.api.deps import Actor
+from fastapi import APIRouter, HTTPException, Query, Response
+from sqlalchemy import or_, select
+from app.api.deps import DB, Actor
 from app.core.config import settings
+from app.models import VoiceTranscript
+from app.schemas.voice import (
+    LANGUAGE,
+    TranscriptIn,
+    TranscriptOut,
+    TranscriptUpdate,
+    VoiceSessionOut,
+)
+from app.services.access import project_access
 
 router = APIRouter(prefix="/voice", tags=["Voice agent"])
 SONIOX_URL = "https://api.soniox.com/v1"
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+SONIOX_WEBSOCKET = "wss://stt-rt.soniox.com/transcribe-websocket"
+# A temporary key only has to open the stream; the stream itself may run for hours.
+KEY_TTL_SECONDS = 300
+MAX_SESSION_SECONDS = 4 * 3600
 
 
 def _api_key() -> str:
@@ -26,7 +37,7 @@ def soniox(method: str, path: str, **kwargs) -> httpx.Response:
             method,
             f"{SONIOX_URL}{path}",
             headers={"Authorization": f"Bearer {key}"},
-            timeout=60,
+            timeout=30,
             **kwargs,
         )
     except httpx.HTTPError:
@@ -37,11 +48,10 @@ def soniox(method: str, path: str, **kwargs) -> httpx.Response:
         raise HTTPException(
             502, "Soniox balance is exhausted; add funds in the Soniox console"
         )
-    if response.status_code == 404:
-        raise HTTPException(404, "Recording not found")
     if response.status_code >= 400:
         try:
-            detail = response.json().get("error_message") or ""
+            body = response.json()
+            detail = body.get("message") or body.get("error_message") or ""
         except ValueError:
             detail = ""
         raise HTTPException(
@@ -50,93 +60,85 @@ def soniox(method: str, path: str, **kwargs) -> httpx.Response:
     return response
 
 
-def _cleanup(transcription_id: str, file_id: str | None) -> None:
-    """Soniox keeps uploads until deleted; remove them once the transcript is read."""
-    for path in (
-        f"/transcriptions/{quote(transcription_id, safe='')}",
-        f"/files/{quote(file_id, safe='')}" if file_id else None,
-    ):
-        if path:
-            try:
-                soniox("DELETE", path)
-            except HTTPException:
-                pass  # Cleanup is best effort; the transcript is already in hand.
-
-
-def _signature(actor, transcription_id: str) -> str:
-    message = f"voice:{actor.id}:{transcription_id}".encode()
-    return hmac.new(settings.jwt_secret.encode(), message, hashlib.sha256).hexdigest()[
-        :32
-    ]
-
-
-def _owned(actor, signed_id: str) -> str:
-    """The Soniox transcription id, only for the person who uploaded the recording."""
-    transcription_id, _, signature = signed_id.rpartition(".")
-    if not transcription_id or not hmac.compare_digest(
-        signature, _signature(actor, transcription_id)
-    ):
-        raise HTTPException(404, "Recording not found")
-    return transcription_id
-
-
-@router.post("/transcriptions", status_code=201)
-async def create(
-    file: UploadFile,
-    actor: Actor,
-    language: str = Query(default="en", pattern=r"^[a-z]{2}(-[A-Za-z]{2})?$"),
-):
-    # Read one byte past the limit rather than the whole upload.
-    audio = await file.read(MAX_UPLOAD_BYTES + 1)
-    if not audio:
-        raise HTTPException(422, "The recording is empty")
-    if len(audio) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, "Recordings are limited to 25 MB")
-    uploaded = soniox(
+@router.post("/session", response_model=VoiceSessionOut)
+def session(actor: Actor):
+    """A short-lived Soniox key the browser uses to stream audio for live transcription."""
+    created = soniox(
         "POST",
-        "/files",
-        files={"file": (file.filename or "voice.webm", audio, file.content_type)},
-    ).json()
-    transcription = soniox(
-        "POST",
-        "/transcriptions",
+        "/auth/temporary-api-key",
         json={
-            "model": settings.soniox_model,
-            "file_id": uploaded["id"],
-            "language_hints": [language.split("-")[0]],
+            "usage_type": "transcribe_websocket",
+            "expires_in_seconds": KEY_TTL_SECONDS,
+            "max_session_duration_seconds": MAX_SESSION_SECONDS,
+            "single_use": True,
             "client_reference_id": f"zeno-voice-{actor.id}",
         },
     ).json()
-    # Soniox ids are shared across the account; the signed id ties this one to its uploader.
-    transcription_id = str(transcription["id"])
     return {
-        "id": f"{transcription_id}.{_signature(actor, transcription_id)}",
-        "status": transcription.get("status", "queued"),
+        "api_key": created["api_key"],
+        "expires_at": created.get("expires_at", ""),
+        "websocket_url": SONIOX_WEBSOCKET,
+        "model": settings.soniox_model,
     }
 
 
-@router.get("/transcriptions/{signed_id}")
-def show(signed_id: str, actor: Actor):
-    transcription_id = _owned(actor, signed_id)
-    item = soniox("GET", f"/transcriptions/{quote(transcription_id, safe='')}").json()
-    status = item.get("status", "queued")
-    transcript = None
-    error = None
-    if status == "completed":
-        transcript = (
-            soniox(
-                "GET", f"/transcriptions/{quote(transcription_id, safe='')}/transcript"
-            )
-            .json()
-            .get("text", "")
-            .strip()
+def _owned(db, id: int, actor) -> VoiceTranscript:
+    transcript = db.get(VoiceTranscript, id)
+    if not transcript or transcript.user_id != actor.id:
+        raise HTTPException(404, "Transcript not found")
+    return transcript
+
+
+@router.get("/transcripts", response_model=list[TranscriptOut])
+def transcripts(db: DB, actor: Actor, q: str = Query(default="", max_length=200)):
+    query = select(VoiceTranscript).where(VoiceTranscript.user_id == actor.id)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        query = query.where(
+            or_(VoiceTranscript.title.ilike(like), VoiceTranscript.text.ilike(like))
         )
-        _cleanup(transcription_id, item.get("file_id"))
-    elif status == "error":
-        # The page treats "failed" as final and shows the reason.
-        status = "failed"
-        error = (
-            item.get("error_message") or "Soniox could not transcribe this recording"
-        )
-        _cleanup(transcription_id, item.get("file_id"))
-    return {"id": signed_id, "status": status, "transcript": transcript, "error": error}
+    return db.scalars(
+        query.order_by(VoiceTranscript.created_at.desc(), VoiceTranscript.id.desc())
+    ).all()
+
+
+@router.post("/transcripts", response_model=TranscriptOut, status_code=201)
+def create_transcript(data: TranscriptIn, db: DB, actor: Actor):
+    if data.project_id is not None:
+        project_access(db, data.project_id, actor)
+    transcript = VoiceTranscript(
+        user_id=actor.id,
+        project_id=data.project_id,
+        title=data.title.strip() or "Untitled transcript",
+        text=data.text,
+        languages=[
+            code for code in dict.fromkeys(data.languages) if re.match(LANGUAGE, code)
+        ],
+        duration_seconds=data.duration_seconds,
+    )
+    db.add(transcript)
+    db.commit()
+    db.refresh(transcript)
+    return transcript
+
+
+@router.get("/transcripts/{id}", response_model=TranscriptOut)
+def show_transcript(id: int, db: DB, actor: Actor):
+    return _owned(db, id, actor)
+
+
+@router.put("/transcripts/{id}", response_model=TranscriptOut)
+def update_transcript(id: int, data: TranscriptUpdate, db: DB, actor: Actor):
+    transcript = _owned(db, id, actor)
+    transcript.title = data.title.strip()
+    transcript.text = data.text
+    db.commit()
+    db.refresh(transcript)
+    return transcript
+
+
+@router.delete("/transcripts/{id}", status_code=204)
+def delete_transcript(id: int, db: DB, actor: Actor):
+    db.delete(_owned(db, id, actor))
+    db.commit()
+    return Response(status_code=204)
