@@ -7,7 +7,10 @@ class Settings(BaseSettings):
     )
     jwt_secret: str
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    # Voice agent transcription (Soniox). SONIX_API_KEY is the old name and still read.
+    soniox_api_key: str = ""
     sonix_api_key: str = ""
+    soniox_model: str = "stt-async-v5"
     # Public URL used in login emails.
     app_url: str = "https://zenoteamsuite.com"
     # Optional: when set, new users and password resets are emailed via SendGrid.
@@ -20,6 +23,8 @@ class Settings(BaseSettings):
     # e.g. ["AmensysInc"]. Empty allows any repository the token can reach.
     github_allowed_owners: list[str] = []
     openai_api_key: str = ""
+    # Model for the requirements/test generator; a larger model drafts more accurately.
+    openai_model: str = "gpt-4o-mini"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

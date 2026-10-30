@@ -60,7 +60,10 @@ export default function VoiceAgentPage() {
     try {
       const body = new FormData();
       body.append('file', audio, 'voice-note.webm');
-      const { data } = await api.post<{ id: string }>('/voice/transcriptions', body);
+      const { data } = await api.post<{ id: string }>(
+        '/voice/transcriptions',
+        body,
+      );
       setPhase('transcribing');
       await poll(data.id);
     } catch (e) {
@@ -70,14 +73,19 @@ export default function VoiceAgentPage() {
   }
   async function poll(id: string) {
     for (;;) {
-      const { data } = await api.get<{ status: string; transcript: string | null }>(`/voice/transcriptions/${id}`);
+      const { data } = await api.get<{
+        status: string;
+        transcript: string | null;
+        error?: string | null;
+      }>(`/voice/transcriptions/${id}`);
       if (data.status === 'completed') {
         setTranscript(data.transcript ?? '');
         setPhase('done');
         toast.success('Transcript ready');
         return;
       }
-      if (data.status === 'failed') throw new Error('Transcription failed');
+      if (data.status === 'failed')
+        throw new Error(data.error || 'Transcription failed');
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
   }
@@ -88,7 +96,10 @@ export default function VoiceAgentPage() {
       <PageBar crumbs={['Voice agent']} />
       <PageBody>
         <div className="mx-auto flex max-w-[680px] flex-col gap-4">
-          <p className="text-[13px] text-ink-2">Record a voice note, transcribe it with Sonix, and turn it into an issue.</p>
+          <p className="text-[13px] text-ink-2">
+            Record a voice note, transcribe it with Soniox, and turn it into an
+            issue.
+          </p>
           <Card className="flex flex-col items-center gap-4 px-6 py-10 text-center">
             <button
               onClick={recording ? stop : start}
@@ -96,31 +107,67 @@ export default function VoiceAgentPage() {
               aria-label={recording ? 'Stop recording' : 'Start recording'}
               className={cn(
                 'flex size-20 items-center justify-center rounded-full text-white shadow-lg transition disabled:opacity-50',
-                recording ? 'animate-pulse bg-red-500 ring-8 ring-red-500/15' : 'bg-accent ring-8 ring-accent/10 hover:bg-accent-2',
+                recording
+                  ? 'animate-pulse bg-red-500 ring-8 ring-red-500/15'
+                  : 'bg-accent ring-8 ring-accent/10 hover:bg-accent-2',
               )}
             >
-              {recording ? <Square className="size-7 fill-current" /> : busy ? <Loader2 className="size-8 animate-spin" /> : <Mic className="size-8" />}
+              {recording ? (
+                <Square className="size-7 fill-current" />
+              ) : busy ? (
+                <Loader2 className="size-8 animate-spin" />
+              ) : (
+                <Mic className="size-8" />
+              )}
             </button>
             <div className="flex flex-col gap-1">
-              <span className="text-[15px] font-semibold">{recording ? `Recording… ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : busy ? (phase === 'uploading' ? 'Uploading to Sonix…' : 'Transcribing…') : 'Tap to record'}</span>
+              <span className="text-[15px] font-semibold">
+                {recording
+                  ? `Recording… ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+                  : busy
+                    ? phase === 'uploading'
+                      ? 'Uploading to Soniox…'
+                      : 'Transcribing…'
+                    : 'Tap to record'}
+              </span>
               <span role="status" className="text-[12.5px] text-ink-3">
-                {recording ? 'Tap again to stop and transcribe.' : busy ? 'This can take a minute or two.' : 'Describe a bug or task out loud.'}
+                {recording
+                  ? 'Tap again to stop and transcribe.'
+                  : busy
+                    ? 'This can take a minute or two.'
+                    : 'Describe a bug or task out loud.'}
               </span>
             </div>
           </Card>
           {error && <Note tone="red">{error}</Note>}
           {phase === 'done' && (
             <Card className="flex flex-col gap-3 p-4">
-              <label htmlFor="voice-transcript" className="text-[13px] font-semibold">
+              <label
+                htmlFor="voice-transcript"
+                className="text-[13px] font-semibold"
+              >
                 Transcript
               </label>
-              <Textarea id="voice-transcript" rows={8} value={transcript} onChange={(e) => setTranscript(e.target.value)} />
+              <Textarea
+                id="voice-transcript"
+                rows={8}
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+              />
               <div className="flex justify-end">
                 <Button
                   variant="primary"
                   icon={<Plus />}
                   disabled={!transcript.trim()}
-                  onClick={() => create({ summary: transcript.trim().split(/[.!?\n]/)[0].slice(0, 120), description: transcript.trim() })}
+                  onClick={() =>
+                    create({
+                      summary: transcript
+                        .trim()
+                        .split(/[.!?\n]/)[0]
+                        .slice(0, 120),
+                      description: transcript.trim(),
+                    })
+                  }
                 >
                   Create issue from transcript
                 </Button>

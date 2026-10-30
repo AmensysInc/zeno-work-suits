@@ -65,5 +65,6 @@ export function errorMessage(error: unknown) {
         ? detail.map((d: { msg: string }) => d.msg).join(', ')
         : 'Unable to save. Please try again.';
   }
+  if (error instanceof Error && error.message) return error.message;
   return 'Something went wrong. Please try again.';
 }
