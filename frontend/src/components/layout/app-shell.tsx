@@ -245,7 +245,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     { name: 'Chats', href: withProject('/chat'), icon: <MessageSquare /> },
     { name: 'Automations', href: '/automations', icon: <Zap /> },
     { name: 'GitHub', href: withProject('/github'), icon: <GithubIcon /> },
-    { name: 'Voice agent', href: '/voice-agent', icon: <Mic /> },
+    { name: 'Speech to text', href: '/voice-agent', icon: <Mic /> },
     ...(me.data?.role === 'ADMIN' ? [{ name: 'People', href: '/admin/users', icon: <Users /> }] : []),
   ];
   const section = (title: string, items: Item[]) =>

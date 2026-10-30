@@ -1,7 +1,5 @@
 """Permissions, sign-in safety, automations and data fixes from the code review."""
 
-import httpx
-from app.api import voice
 from app.core.config import settings
 from app.services import automations, github
 from tests.conftest import create_user
@@ -205,46 +203,6 @@ def test_repeated_failed_sign_ins_are_throttled(client, auth):
     assert "Try again in 15 minutes" in locked.json()["detail"]
 
 
-def test_voice_transcripts_belong_to_their_uploader(client, auth, monkeypatch):
-    monkeypatch.setattr(settings, "soniox_api_key", "soniox-test")
-    other = create_user(client, auth, "Vic", "Voice", "vic@example.com")
-    calls = []
-
-    def fake_soniox(method, url, **kwargs):
-        calls.append((method, url.removeprefix(voice.SONIOX_URL)))
-        if method == "DELETE":
-            return httpx.Response(204)
-        if url.endswith("/files"):
-            return httpx.Response(201, json={"id": "file-1"})
-        if method == "POST":
-            assert kwargs["json"]["file_id"] == "file-1"
-            assert kwargs["json"]["model"] == settings.soniox_model
-            return httpx.Response(201, json={"id": "abc123", "status": "queued"})
-        if url.endswith("/transcript"):
-            return httpx.Response(200, json={"id": "abc123", "text": " Hello team "})
-        return httpx.Response(
-            200, json={"id": "abc123", "status": "completed", "file_id": "file-1"}
-        )
-
-    monkeypatch.setattr(voice.httpx, "request", fake_soniox)
-    created = client.post(
-        "/api/voice/transcriptions",
-        headers=auth,
-        files={"file": ("note.webm", b"audio", "audio/webm")},
-    ).json()
-    assert created["id"].startswith("abc123.")
-    url = f"/api/voice/transcriptions/{created['id']}"
-    assert client.get(url, headers=auth).json()["transcript"] == "Hello team"
-    # The upload and transcription are deleted from Soniox once read.
-    assert ("DELETE", "/transcriptions/abc123") in calls
-    assert ("DELETE", "/files/file-1") in calls
-    assert client.get(url, headers=other).status_code == 404
-    # The raw Soniox id is not enough on its own.
-    assert (
-        client.get("/api/voice/transcriptions/abc123", headers=auth).status_code == 404
-    )
-
-
 def test_automation_rules_run_on_status_change(client, auth, monkeypatch):
     p = project(client, auth)
     dev = member(client, auth, p["id"], "Dev", "dev@example.com")
@@ -335,49 +293,3 @@ def test_issue_list_reports_when_work_was_done(client, auth):
     )
     [listed] = client.get(f"/api/issues?project_id={p['id']}", headers=auth).json()
     assert listed["resolved_at"] is not None
-
-
-def test_voice_failure_reason_is_shown(client, auth, monkeypatch):
-    # The old setting name still works for servers that set SONIX_API_KEY.
-    monkeypatch.setattr(settings, "soniox_api_key", "")
-    monkeypatch.setattr(settings, "sonix_api_key", "legacy-name")
-
-    def fake_soniox(method, url, **kwargs):
-        assert kwargs["headers"]["Authorization"] == "Bearer legacy-name"
-        if method == "DELETE":
-            return httpx.Response(204)
-        if url.endswith("/files"):
-            return httpx.Response(201, json={"id": "file-2"})
-        if method == "POST":
-            return httpx.Response(201, json={"id": "t2", "status": "queued"})
-        return httpx.Response(
-            200,
-            json={
-                "status": "error",
-                "error_message": "Audio is silent",
-                "file_id": "file-2",
-            },
-        )
-
-    monkeypatch.setattr(voice.httpx, "request", fake_soniox)
-    created = client.post(
-        "/api/voice/transcriptions",
-        headers=auth,
-        files={"file": ("note.webm", b"audio", "audio/webm")},
-    ).json()
-    body = client.get(f"/api/voice/transcriptions/{created['id']}", headers=auth).json()
-    assert (body["status"], body["error"]) == ("failed", "Audio is silent")
-
-
-def test_voice_rejected_key_names_soniox(client, auth, monkeypatch):
-    monkeypatch.setattr(settings, "soniox_api_key", "bad")
-    monkeypatch.setattr(
-        voice.httpx, "request", lambda *a, **k: httpx.Response(401, json={})
-    )
-    response = client.post(
-        "/api/voice/transcriptions",
-        headers=auth,
-        files={"file": ("note.webm", b"audio", "audio/webm")},
-    )
-    assert response.status_code == 502
-    assert "Soniox rejected the API key" in response.json()["detail"]

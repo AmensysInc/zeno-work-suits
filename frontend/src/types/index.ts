@@ -469,3 +469,13 @@ export const label = (s: string) =>
         .toLowerCase()
         .replaceAll('_', ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase());
+export interface VoiceTranscript {
+  id: number;
+  title: string;
+  text: string;
+  languages: string[];
+  duration_seconds: number;
+  project: { id: number; key: string; name: string } | null;
+  created_at: string;
+  updated_at: string;
+}

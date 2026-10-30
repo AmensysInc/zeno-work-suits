@@ -11,3 +11,4 @@ from .comment import Comment
 from .chat import ChatMessage
 from .automation import AutomationRule
 from .activity_log import ActivityLog
+from .voice_transcript import VoiceTranscript
