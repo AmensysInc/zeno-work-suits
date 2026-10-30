@@ -1,7 +1,10 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Lock, Search } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { Check, Lock, Search } from 'lucide-react';
+import { api, errorMessage } from '@/lib/api';
 import { useData, useSave } from '@/hooks/data';
 import type { GitHubBranches, GitHubRepo, Project } from '@/types';
 import { Dialog } from '@/components/ui/dialog';
@@ -23,6 +26,7 @@ export function LinkRepoDialog({
   onLinked: (projectId: number, fullName: string) => void;
   onClose: () => void;
 }) {
+  const qc = useQueryClient();
   const repos = useData<GitHubRepo[]>('/github/repos');
   const [projectId, setProjectId] = useState(initialProject ?? projects[0]?.id);
   const project = projects.find((p) => p.id === projectId);
@@ -30,42 +34,64 @@ export function LinkRepoDialog({
   const already = new Set(
     (project?.repositories ?? []).map((r) => r.full_name.toLowerCase()),
   );
-  const [chosen, setChosen] = useState<string>();
+  // Several repositories can be ticked and linked together.
+  const [chosen, setChosen] = useState<string[]>([]);
   const [search, setSearch] = useState('');
-  const link = useSave<{ full_name: string }>(
-    `/github/projects/${projectId}/repository`,
-    'put',
-    'Repository linked',
-  );
+  const [busy, setBusy] = useState(false);
   const shown = (repos.data ?? []).filter((r) =>
     `${r.full_name} ${r.description}`
       .toLowerCase()
       .includes(search.trim().toLowerCase()),
   );
+  const toggle = (name: string) =>
+    setChosen((list) =>
+      list.includes(name) ? list.filter((n) => n !== name) : [...list, name],
+    );
   const submit = async () => {
-    if (!chosen || !projectId) return;
-    try {
-      await link.mutateAsync({ full_name: chosen });
-      onLinked(projectId, chosen);
-      onClose();
-    } catch {
-      /* toast */
+    if (!chosen.length || !projectId) return;
+    setBusy(true);
+    const linked: string[] = [];
+    const failed: string[] = [];
+    // One at a time, so each repository gets its own permission check and message.
+    for (const name of chosen) {
+      try {
+        await api.put(`/github/projects/${projectId}/repository`, {
+          full_name: name,
+        });
+        linked.push(name);
+      } catch (e) {
+        failed.push(`${name}: ${errorMessage(e)}`);
+      }
     }
+    await qc.invalidateQueries();
+    setBusy(false);
+    if (linked.length)
+      toast.success(
+        linked.length === 1
+          ? `Linked ${linked[0]}`
+          : `Linked ${linked.length} repositories`,
+      );
+    failed.forEach((message) => toast.error(message));
+    if (linked.length) onLinked(projectId, linked[0]);
+    if (!failed.length) onClose();
+    else setChosen((list) => list.filter((n) => !linked.includes(n)));
   };
   return (
     <Dialog
-      title="Link repository"
+      title="Link repositories"
       onClose={onClose}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
-            loading={link.isPending}
-            disabled={!chosen || already.has(chosen.toLowerCase())}
+            loading={busy}
+            disabled={!chosen.length}
             onClick={submit}
           >
-            Link
+            {chosen.length > 1
+              ? `Link ${chosen.length} repositories`
+              : 'Link repository'}
           </Button>
         </>
       }
@@ -78,7 +104,7 @@ export function LinkRepoDialog({
               value={projectId}
               onChange={(v) => {
                 setProjectId(v);
-                setChosen(undefined);
+                setChosen([]);
               }}
               options={projects.map((p) => ({
                 value: p.id,
@@ -87,16 +113,20 @@ export function LinkRepoDialog({
             />
           )}
         </Field>
-        {!!already.size && (
-          <Note tone="blue">
-            This project already links {already.size}{' '}
-            {already.size === 1 ? 'repository' : 'repositories'}. The one you
-            pick is added; the others stay linked.
-          </Note>
-        )}
+        <Note tone="blue">
+          Tick every repository this project uses.
+          {already.size
+            ? ` It already links ${already.size}; those stay linked.`
+            : ''}
+        </Note>
         <div className="flex flex-col gap-1.5">
-          <span className="text-[12.5px] font-medium">
+          <span className="flex items-center justify-between text-[12.5px] font-medium">
             Available repositories
+            {chosen.length > 0 && (
+              <span className="font-normal text-accent-ink">
+                {chosen.length} selected
+              </span>
+            )}
           </span>
           <Input
             icon={<Search />}
@@ -124,44 +154,54 @@ export function LinkRepoDialog({
           )}
           {shown.length > 0 && (
             <div
-              role="radiogroup"
+              role="group"
               aria-label="Repositories"
               className="scrollbar-thin max-h-72 overflow-y-auto rounded-lg border border-line p-1"
             >
-              {shown.map((r) => (
-                <button
-                  key={r.full_name}
-                  role="radio"
-                  aria-checked={chosen === r.full_name}
-                  onClick={() => setChosen(r.full_name)}
-                  className={cn(
-                    'flex w-full items-start gap-2.5 rounded-md p-2.5 text-left hover:bg-hover',
-                    chosen === r.full_name &&
-                      'bg-accent-soft hover:bg-accent-soft',
-                  )}
-                >
-                  <span
+              {shown.map((r) => {
+                const linkedHere = already.has(r.full_name.toLowerCase());
+                const on = linkedHere || chosen.includes(r.full_name);
+                return (
+                  <button
+                    key={r.full_name}
+                    role="checkbox"
+                    aria-checked={on}
+                    disabled={linkedHere}
+                    onClick={() => toggle(r.full_name)}
                     className={cn(
-                      'mt-0.5 size-[15px] shrink-0 rounded-full border-[1.5px] border-line-2',
-                      chosen === r.full_name && 'border-[4.5px] border-accent',
+                      'flex w-full items-start gap-2.5 rounded-md p-2.5 text-left hover:bg-hover disabled:cursor-default disabled:hover:bg-transparent',
+                      on &&
+                        !linkedHere &&
+                        'bg-accent-soft hover:bg-accent-soft',
                     )}
-                  />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold">
-                      {r.full_name}
-                      {r.private && <Badge icon={<Lock />}>Private</Badge>}
-                      {already.has(r.full_name.toLowerCase()) && (
-                        <Badge tone="green">Linked to this project</Badge>
+                  >
+                    <span
+                      className={cn(
+                        'mt-0.5 flex size-[15px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] border-line-2',
+                        on && 'border-accent bg-accent text-white',
+                        linkedHere && 'opacity-50',
                       )}
+                    >
+                      {on && <Check className="size-[11px]" strokeWidth={3} />}
                     </span>
-                    <span className="truncate text-xs text-ink-3">
-                      {r.linked_projects.length
-                        ? `Linked to ${r.linked_projects.join(', ')}`
-                        : r.description || `Default branch ${r.default_branch}`}
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold">
+                        {r.full_name}
+                        {r.private && <Badge icon={<Lock />}>Private</Badge>}
+                        {linkedHere && (
+                          <Badge tone="green">Linked to this project</Badge>
+                        )}
+                      </span>
+                      <span className="truncate text-xs text-ink-3">
+                        {r.linked_projects.length
+                          ? `Linked to ${r.linked_projects.join(', ')}`
+                          : r.description ||
+                            `Default branch ${r.default_branch}`}
+                      </span>
                     </span>
-                  </span>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
