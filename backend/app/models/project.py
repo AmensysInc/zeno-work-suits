@@ -1,5 +1,5 @@
 from datetime import date
-from sqlalchemy import Date, String, Text, ForeignKey, Table, Column
+from sqlalchemy import Date, String, Text, ForeignKey, Table, Column, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 from app.models.base import Timestamps
@@ -35,6 +35,20 @@ class ProjectMember(Base):
     user = relationship("User", viewonly=True)
 
 
+class ProjectRepository(Timestamps, Base):
+    """A GitHub repository linked to a project; a project can link several."""
+
+    __tablename__ = "project_repositories"
+    __table_args__ = (UniqueConstraint("project_id", "full_name"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    # "owner/name" exactly as GitHub spells it.
+    full_name: Mapped[str] = mapped_column(String(200))
+    html_url: Mapped[str] = mapped_column(String(500))
+
+
 class Project(Timestamps, Base):
     __tablename__ = "projects"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -49,10 +63,18 @@ class Project(Timestamps, Base):
     end_date: Mapped[date | None] = mapped_column(Date)
     code_freeze_date: Mapped[date | None] = mapped_column(Date)
     testing_date: Mapped[date | None] = mapped_column(Date)
+    # The first linked repository, kept for older clients; `repositories` holds them all.
     github_repo: Mapped[str] = mapped_column(String(500), default="")
     issue_counter: Mapped[int] = mapped_column(default=0)
     test_counter: Mapped[int] = mapped_column(default=0)
     owner = relationship("User", back_populates="projects")
+    repositories = relationship(
+        "ProjectRepository",
+        order_by="ProjectRepository.id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+    )
     members = relationship("User", secondary=project_members, overlaps="team")
     team = relationship(
         "ProjectMember",

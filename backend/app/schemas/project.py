@@ -71,12 +71,20 @@ class TeamMemberOut(BaseModel):
     role: str
 
 
+class RepositoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    full_name: str
+    html_url: str
+
+
 class ProjectOut(ProjectIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
     owner_id: int
     status: str
+    # The first linked repository; `repositories` lists them all.
     github_repo: str
+    repositories: list[RepositoryOut] = []
     created_at: datetime
     updated_at: datetime
     members: list[UserOut]

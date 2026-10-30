@@ -2,15 +2,21 @@ from fastapi import HTTPException
 from sqlalchemy import select, update as sql_update, insert
 from sqlalchemy.exc import IntegrityError
 from app.models import Project, User, Issue
+from app.models.base import now
 from app.models.project import project_members
 from app.schemas.project import check_schedule, DATE_FIELDS
 from app.services.access import project_access
+from app.services.github import add_repository, repo_name
 
 
 def create(db, data, actor):
     if actor.role == "EMPLOYEE":
         raise HTTPException(403, "Employees cannot create projects")
-    p = Project(**data.model_dump(), owner_id=actor.id)
+    values = data.model_dump()
+    url = values.pop("github_repo", "")
+    p = Project(**values, owner_id=actor.id)
+    if repo_name(url):
+        add_repository(p, repo_name(url), url)
     db.add(p)
     try:
         db.flush()
@@ -37,6 +43,11 @@ def update(db, id, data, actor):
         check_schedule(merged)
     except ValueError as e:
         raise HTTPException(422, str(e))
+    # A repository entered on the form is added to the linked ones; the GitHub
+    # page links and unlinks them, so a blank field removes nothing.
+    url = values.pop("github_repo", "")
+    if repo_name(url) and add_repository(p, repo_name(url), url):
+        p.updated_at = now()  # Forms keyed on updated_at reload with the new link.
     for k, v in values.items():
         setattr(p, k, v)
     db.commit()

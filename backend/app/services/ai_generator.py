@@ -101,12 +101,9 @@ MAX_LIST = 12
 MAX_STEPS = 20
 
 
-def _repo(db, actor, project_id):
-    project = project_access(db, project_id, actor)
-    name = github.repo_name(project.github_repo)
-    if not name:
-        raise HTTPException(409, "This project has no linked GitHub repository")
-    return project, name
+def _repo(db, actor, project_id, repo=None):
+    """The project and one of its linked repositories (the first unless `repo` says)."""
+    return github.linked_repo(db, project_id, actor, repo)
 
 
 def _default_branch(name):
@@ -179,8 +176,8 @@ def _module_counts(paths):
     return counts
 
 
-def modules(db, actor, project_id):
-    _, name = _repo(db, actor, project_id)
+def modules(db, actor, project_id, repo=None):
+    _, name = _repo(db, actor, project_id, repo)
     branch, _ = _repo_info(name)
     items, _ = _tree(name, branch)
     counts = _module_counts(
@@ -215,9 +212,9 @@ def _pull_files(name, number):
     return files
 
 
-def pull_module(db, actor, project_id, number):
+def pull_module(db, actor, project_id, number, repo=None):
     """The narrowest folder holding most of a pull request's changed source files."""
-    _, name = _repo(db, actor, project_id)
+    _, name = _repo(db, actor, project_id, repo)
     changed = [
         f["filename"] for f in _pull_files(name, number) if _is_source(f["filename"])
     ]
@@ -1092,7 +1089,7 @@ def _existing_stories(db, project_id):
 
 
 def generate(db, actor, data):
-    project, name = _repo(db, actor, data.project_id)
+    project, name = _repo(db, actor, data.project_id, data.repository or None)
     kind, ref, sha, context, sources, source_notes, outline = _resolve(name, data)
     existing = (
         _existing_stories(db, project.id) if data.output_type == "TEST_CASES" else {}
@@ -1225,14 +1222,23 @@ def save(db, actor, data):
 
 
 def suggestions(db, actor, project_id):
-    """Generated items whose own source (branch, pull request or module) has changed."""
-    project, name = _repo(db, actor, project_id)
-    default = _default_branch(name)
-    heads: dict[tuple[str, str], str | None] = {}
-    moved: dict[tuple[str, str, str], bool] = {}
+    """Generated items whose own source (branch, pull request or module) has changed.
 
-    def head(kind, ref):
-        key = (kind, ref)
+    Each item is checked against the linked repository it was generated from.
+    """
+    project, primary = _repo(db, actor, project_id)
+    linked = {r.full_name.lower(): r.full_name for r in project.repositories}
+    defaults: dict[str, str] = {}
+    heads: dict[tuple[str, str, str], str | None] = {}
+    moved: dict[tuple[str, str, str, str], bool] = {}
+
+    def default_branch(name):
+        if name not in defaults:
+            defaults[name] = _default_branch(name)
+        return defaults[name]
+
+    def head(name, kind, ref):
+        key = (name, kind, ref)
         if key not in heads:
             try:
                 if kind == "COMMIT":
@@ -1249,10 +1255,10 @@ def suggestions(db, actor, project_id):
                 heads[key] = None  # The branch or pull request is gone.
         return heads[key]
 
-    def changed(old, new, module_path):
+    def changed(name, old, new, module_path):
         if old == new:
             return False
-        key = (old, new, module_path)
+        key = (name, old, new, module_path)
         if key not in moved:
             try:
                 files = github.call("GET", f"/repos/{name}/compare/{old}...{new}").get(
@@ -1272,12 +1278,14 @@ def suggestions(db, actor, project_id):
 
     def stale(source):
         commit = source.get("source_commit")
-        if source.get("repository") != name or not commit:
+        # Items from a repository that is no longer linked are not checked.
+        name = linked.get((source.get("repository") or "").lower())
+        if not name or not commit:
             return False
         kind = source.get("source_kind") or "DEFAULT"
-        ref = source.get("source_ref") or default
-        current = head(kind, ref)
-        if current and changed(commit, current, source.get("module_path", "")):
+        ref = source.get("source_ref") or default_branch(name)
+        current = head(name, kind, ref)
+        if current and changed(name, commit, current, source.get("module_path", "")):
             stale_commits.add(commit)
             return True
         return False
@@ -1294,7 +1302,7 @@ def suggestions(db, actor, project_id):
         )
         if stale(test.ai_source or {})
     ]
-    current = head("DEFAULT", default)
+    current = head(primary, "DEFAULT", default_branch(primary))
     return {
         "source_commit": next(iter(sorted(stale_commits)), current),
         "current_commit": current,

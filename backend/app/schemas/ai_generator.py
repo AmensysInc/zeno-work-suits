@@ -28,6 +28,8 @@ class PullModuleOut(BaseModel):
 
 class GenerateIn(BaseModel):
     project_id: int
+    # Which linked repository to read ("owner/name"); the project's first when blank.
+    repository: str = Field(default="", max_length=200, pattern=r"^$|^[\w.-]+/[\w.-]+$")
     module_path: str = ""
     # At most one of branch, pull_number and commit. None of them reads the
     # module from the default branch; each of them reads only what it changed.

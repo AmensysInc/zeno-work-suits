@@ -20,7 +20,6 @@ import {
   generatorCoverage,
   generatorOutputs,
   label,
-  repoName,
   type GeneratedDraft,
   type GeneratorCoverage,
   type GeneratorModule,
@@ -72,13 +71,20 @@ export default function AiGeneratorPage() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const linked = (projects.data ?? []).filter((p) => repoName(p.github_repo));
+  const linked = (projects.data ?? []).filter((p) => p.repositories.length);
   const projectId =
     Number(params.get('project')) ||
     current ||
     linked[0]?.id ||
     projects.data?.[0]?.id;
   const project = projects.data?.find((p) => p.id === projectId);
+  // A project can link several repositories; ?repo= picks one, else its first.
+  const repository =
+    project?.repositories.find(
+      (r) =>
+        r.full_name.toLowerCase() === (params.get('repo') ?? '').toLowerCase(),
+    )?.full_name ?? project?.repositories[0]?.full_name;
+  const repoParam = `repo=${encodeURIComponent(repository ?? '')}`;
   const [modulePath, setModulePath] = useState('');
   const [picked, setPicked] = useState<Source | null>(null);
   const pull = picked?.kind === 'pull' ? picked.pull : null;
@@ -95,10 +101,11 @@ export default function AiGeneratorPage() {
   >({});
   const [saved, setSaved] = useState<Saved | null>(null);
   // Modules, pull requests, branches and drafts belong to one repository:
-  // switching project starts over instead of showing the previous one's.
-  const [shownProject, setShownProject] = useState(projectId);
-  if (shownProject !== projectId) {
-    setShownProject(projectId);
+  // switching project or repository starts over instead of showing the previous one's.
+  const shownKey = `${projectId}:${repository}`;
+  const [shownProject, setShownProject] = useState(shownKey);
+  if (shownProject !== shownKey) {
+    setShownProject(shownKey);
     setModulePath('');
     setPicked(null);
     setDraft(null);
@@ -109,17 +116,17 @@ export default function AiGeneratorPage() {
     github_configured: boolean;
     openai_configured: boolean;
   }>('/ai-generator/status');
-  const hasRepo = !!project && !!repoName(project.github_repo);
+  const hasRepo = !!project && !!repository;
   const modules = useData<GeneratorModule[]>(
-    `/ai-generator/projects/${projectId}/modules`,
+    `/ai-generator/projects/${projectId}/modules?${repoParam}`,
     hasRepo,
   );
   const pulls = useData<GitHubPull[]>(
-    `/github/projects/${projectId}/pulls?state=all`,
+    `/github/projects/${projectId}/pulls?state=all&${repoParam}`,
     hasRepo && !!status.data?.github_configured,
   );
   const branches = useData<GitHubBranches>(
-    `/github/projects/${projectId}/branches`,
+    `/github/projects/${projectId}/branches?${repoParam}`,
     hasRepo && !!status.data?.github_configured,
   );
   const suggestions = useData<GeneratorSuggestions>(
@@ -188,6 +195,7 @@ export default function AiGeneratorPage() {
       (
         await api.post<GeneratedDraft>('/ai-generator/generate', {
           project_id: projectId,
+          repository: repository ?? '',
           module_path: modulePath,
           branch,
           pull_number: pull?.number ?? null,
@@ -303,19 +311,42 @@ export default function AiGeneratorPage() {
           )}
           <div className="grid items-start gap-4 lg:grid-cols-[1fr_380px]">
             <Card className="flex flex-col gap-4 p-4">
-              <Field label="GitHub repository">
-                {(id) => (
-                  <Select<number>
-                    id={id}
-                    value={projectId}
-                    onChange={(v) => router.push(`/ai-generator?project=${v}`)}
-                    options={(projects.data ?? []).map((p) => ({
-                      value: p.id,
-                      label: `${p.name} · ${repoName(p.github_repo) ?? 'no repository'}`,
-                    }))}
-                  />
-                )}
-              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Project">
+                  {(id) => (
+                    <Select<number>
+                      id={id}
+                      value={projectId}
+                      onChange={(v) =>
+                        router.push(`/ai-generator?project=${v}`)
+                      }
+                      options={(projects.data ?? []).map((p) => ({
+                        value: p.id,
+                        label: `${p.name} · ${p.repositories.length ? `${p.repositories.length} ${p.repositories.length === 1 ? 'repository' : 'repositories'}` : 'no repository'}`,
+                      }))}
+                    />
+                  )}
+                </Field>
+                <Field label="GitHub repository">
+                  {(id) => (
+                    <Select<string>
+                      id={id}
+                      value={repository}
+                      placeholder="No linked repository"
+                      disabled={!project?.repositories.length}
+                      onChange={(v) =>
+                        router.push(
+                          `/ai-generator?project=${projectId}&repo=${encodeURIComponent(v)}`,
+                        )
+                      }
+                      options={(project?.repositories ?? []).map((r) => ({
+                        value: r.full_name,
+                        label: r.full_name,
+                      }))}
+                    />
+                  )}
+                </Field>
+              </div>
               {project && !hasRepo && (
                 <Note tone="amber">
                   Link a repository on the{' '}
@@ -464,8 +495,9 @@ export default function AiGeneratorPage() {
               </div>
             </Card>
             <RepoActivity
-              key={projectId}
+              key={shownKey}
               project={project}
+              repository={repository}
               configured={status.data?.github_configured}
               selectedPull={pull?.number}
               onSelectPull={selectPull}

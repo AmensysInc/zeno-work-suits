@@ -655,3 +655,18 @@ def test_test_cases_join_existing_stories(client, auth, monkeypatch):
     ).json()
     assert test["issue_id"] == story["id"]
     assert test["criterion_ids"] == [criteria[1]["id"]]
+
+
+def test_generator_reads_only_linked_repositories(client, auth, monkeypatch):
+    project = project_with_repo(client, auth, monkeypatch)
+    assert (
+        generate(client, auth, project, repository="acme/hr-portal").status_code == 200
+    )
+    assert generate(client, auth, project, repository="acme/secret").status_code == 404
+    assert (
+        client.get(
+            f"/api/ai-generator/projects/{project['id']}/modules?repo=acme/secret",
+            headers=auth,
+        ).status_code
+        == 404
+    )

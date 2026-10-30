@@ -53,6 +53,10 @@ export interface TeamMember {
   user: User;
   role: ProjectRole;
 }
+export interface ProjectRepository {
+  full_name: string;
+  html_url: string;
+}
 export interface Project {
   id: number;
   key: string;
@@ -65,7 +69,9 @@ export interface Project {
   end_date: string | null;
   code_freeze_date: string | null;
   testing_date: string | null;
+  /** The first linked repository; `repositories` lists them all. */
   github_repo: string;
+  repositories: ProjectRepository[];
   created_at: string;
   updated_at: string;
   members: User[];
