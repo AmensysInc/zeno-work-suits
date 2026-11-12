@@ -57,10 +57,16 @@ def update_user(db, user_id, data, admin):
         )
         if user.is_admin and others is None:
             raise HTTPException(400, "At least one active administrator is required")
+    if "email" in changes and changes["email"] is not None:
+        changes["email"] = str(changes["email"]).lower()
     for key, value in changes.items():
         if value is not None:
             setattr(user, key, value.strip() if isinstance(value, str) else value)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "A user with that email already exists")
     return user
 
 

@@ -11,3 +11,4 @@ tsconfig.tsbuildinfo
 .next/
 next-env.d.ts
 *.tsbuildinfo
+uploads/

@@ -4,12 +4,18 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import Markdown from 'react-markdown';
-import { Calendar, Pencil, Plus, Sparkles, Timer, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { Calendar, Download, Paperclip, Pencil, Plus, Sparkles, Timer, Trash2 } from 'lucide-react';
 import { useCanLead, useData, useIssues, useSave } from '@/hooks/data';
-import { label, priorities, statuses, type Issue, type Sprint, type TestCase } from '@/types';
+import { api, errorMessage } from '@/lib/api';
+import { downloadAttachment } from '@/lib/attachments';
+import { formatAttachmentSize } from '@/components/issues/attachment-field';
+import FilePreview, { type PreviewTarget } from '@/components/issues/file-preview';
+import { label, priorities, statuses, type Issue, type IssueAttachment, type Sprint, type TestCase } from '@/types';
 import { PageBar } from '@/components/layout/page';
 import { useCreateIssue, usePageProject } from '@/components/layout/context';
-import { Avatar, State, Tag, projectColor } from '@/components/ui/display';
+import { Avatar, AvatarStack, State, Tag, projectColor } from '@/components/ui/display';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -45,8 +51,26 @@ export default function IssueDetailsPage() {
   const create = useCreateIssue();
   const canLead = useCanLead(issue?.project_id);
   const tests = useData<TestCase[]>(`/test-cases?issue_id=${issueId}`, canLead && issue?.issue_type === 'STORY');
+  const attachments = useData<IssueAttachment[]>(`/issues/${issueId}/attachments`);
+  const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('overview');
+  const [childBusy, setChildBusy] = useState<number | null>(null);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   usePageProject(issue?.project_id);
+
+  const updateChildStatus = async (child: Issue, status: Issue['status']) => {
+    if (child.status === status) return;
+    setChildBusy(child.id);
+    try {
+      await api.patch(`/issues/${child.id}/status`, { status });
+      await qc.invalidateQueries();
+      toast.success('Status updated');
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setChildBusy(null);
+    }
+  };
   if (!issue)
     return (
       <>
@@ -147,7 +171,51 @@ export default function IssueDetailsPage() {
                   </div>
                 )}
               </div>
+              {(attachments.data?.length ?? 0) > 0 && (
+                <div className="flex flex-col gap-2">
+                  <span className="caps">Documents</span>
+                  <ul className="flex flex-col gap-1.5">
+                    {attachments.data!.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center gap-2 rounded-md border border-line bg-subtle px-3 py-2 text-[13px]"
+                      >
+                        <Paperclip className="size-3.5 shrink-0 text-ink-3" />
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 truncate text-left font-medium text-accent-ink hover:underline"
+                          onClick={() =>
+                            setPreview({
+                              kind: 'remote',
+                              id: item.id,
+                              filename: item.filename,
+                              contentType: item.content_type,
+                            })
+                          }
+                        >
+                          {item.filename}
+                        </button>
+                        <span className="shrink-0 text-[12px] text-ink-3">{formatAttachmentSize(item.size_bytes)}</span>
+                        <Button
+                          size="sm"
+                          icon={<Download />}
+                          onClick={async () => {
+                            try {
+                              await downloadAttachment(item.id, item.filename);
+                            } catch (e) {
+                              toast.error(errorMessage(e));
+                            }
+                          }}
+                        >
+                          Download
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {issue.issue_type === 'STORY' && <AcceptanceCriteria issueId={issue.id} />}
+              <FilePreview target={preview} onClose={() => setPreview(null)} />
             </>
           )}
           {tab === 'children' && (
@@ -158,7 +226,7 @@ export default function IssueDetailsPage() {
                   {epic ? 'Add child issue' : 'Add subtask'}
                 </Button>
               </div>
-              <IssueList issues={children} />
+              <IssueList issues={children} onStatusChange={updateChildStatus} statusBusyId={childBusy} />
             </div>
           )}
           {tab === 'tests' && <TestCaseList issueId={issue.id} />}
@@ -187,9 +255,20 @@ export default function IssueDetailsPage() {
               options={priorities.map((p) => ({ value: p, label: label(p), icon: <PriorityIcon priority={p} /> }))}
             />
           </Prop>
-          <Prop name="Assignee">
-            <Avatar user={issue.assignee} size={20} />
-            {issue.assignee ? `${issue.assignee.first_name} ${issue.assignee.last_name}` : <span className="text-ink-3">Unassigned</span>}
+          <Prop name="Assignees">
+            {(issue.assignees?.length ?? 0) > 0 ? (
+              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <AvatarStack users={issue.assignees!} size={20} max={4} />
+                <span className="truncate">
+                  {issue.assignees!.map((u) => `${u.first_name} ${u.last_name}`).join(', ')}
+                </span>
+              </span>
+            ) : (
+              <>
+                <Avatar user={issue.assignee} size={20} />
+                {issue.assignee ? `${issue.assignee.first_name} ${issue.assignee.last_name}` : <span className="text-ink-3">Unassigned</span>}
+              </>
+            )}
           </Prop>
           <Prop name="Reporter">
             <Avatar user={issue.reporter} size={20} />

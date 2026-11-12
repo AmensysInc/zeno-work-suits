@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Calendar, Kanban, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { Calendar, Download, Kanban, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 import { useCanLead, useData, useIssues, useSave } from '@/hooks/data';
-import type { Sprint } from '@/types';
+import type { Project, Sprint } from '@/types';
+import { exportIssuesXlsx } from '@/lib/export-issues';
 import { PageBar, PageBody } from '@/components/layout/page';
 import { Badge, Card, State } from '@/components/ui/display';
 import { Button, LinkButton } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { shortDate } from '@/lib/utils';
 
 export default function SprintPlanningPage() {
   const pid = Number(useParams<{ projectId: string }>().projectId);
+  const project = useData<Project>(`/projects/${pid}`);
   const query = useData<Sprint[]>(`/projects/${pid}/sprints`);
   const issues = useIssues(pid);
   const canLead = useCanLead(pid);
@@ -32,11 +34,28 @@ export default function SprintPlanningPage() {
         crumbs={['Sprints']}
         projectId={pid}
         actions={
-          canLead && (
-            <Button variant="primary" icon={<Plus />} onClick={() => setModal('create')}>
-              Create sprint
+          <>
+            <Button
+              icon={<Download />}
+              disabled={!selected || !sprintIssues.length}
+              onClick={() => {
+                if (!selected) return;
+                exportIssuesXlsx({
+                  filenameStem: `${project.data?.key ?? 'project'}-${selected.name}`,
+                  issues: sprintIssues,
+                  sprints: query.data ?? [],
+                  lookupIssues: issues.data ?? [],
+                });
+              }}
+            >
+              <span className="hidden sm:inline">Export</span>
             </Button>
-          )
+            {canLead && (
+              <Button variant="primary" icon={<Plus />} onClick={() => setModal('create')}>
+                Create sprint
+              </Button>
+            )}
+          </>
         }
       />
       <PageBody>

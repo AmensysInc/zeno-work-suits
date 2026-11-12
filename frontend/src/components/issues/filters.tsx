@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Check, Plus, Search, X } from 'lucide-react';
 import { issueTypes, label, priorities, statuses, type Issue, type Sprint, type User } from '@/types';
 import { Input } from '@/components/ui/input';
@@ -20,15 +21,37 @@ export interface Filters {
 }
 export type FilterField = Exclude<keyof Filters, 'search'>;
 const empty: Filters = { search: '', type: '', status: '', priority: '', assignee: '', epic: '', sprint: '' };
+const wipStatuses = new Set(['IN_PROGRESS', 'CODE_REVIEW', 'TESTING']);
+
+const statusMatches = (i: Issue, status: string) => {
+  if (!status) return true;
+  if (status === 'OPEN') return i.issue_type !== 'EPIC' && i.status !== 'DONE';
+  if (status === 'WIP') return wipStatuses.has(i.status);
+  return i.status === status;
+};
 
 export function useFilters() {
-  const [filters, setFilters] = useState(empty);
+  const params = useSearchParams();
+  const [filters, setFilters] = useState<Filters>(() => ({
+    search: params.get('q') ?? params.get('search') ?? '',
+    type: params.get('type') ?? '',
+    status: params.get('status') ?? '',
+    priority: params.get('priority') ?? '',
+    assignee: params.get('assignee') ?? '',
+    epic: params.get('epic') ?? '',
+    sprint: params.get('sprint') ?? '',
+  }));
   const matches = (i: Issue) =>
     (!filters.search || `${i.issue_key} ${i.summary} ${i.labels.join(' ')}`.toLowerCase().includes(filters.search.toLowerCase())) &&
     (!filters.type || i.issue_type === filters.type) &&
-    (!filters.status || i.status === filters.status) &&
+    statusMatches(i, filters.status) &&
     (!filters.priority || i.priority === filters.priority) &&
-    (!filters.assignee || String(i.assignee_id ?? 'none') === filters.assignee) &&
+    (!filters.assignee ||
+      (filters.assignee === 'none'
+        ? !(i.assignee_id || i.assignee_ids?.length || i.assignees?.length)
+        : String(i.assignee_id) === filters.assignee ||
+          !!i.assignee_ids?.includes(Number(filters.assignee)) ||
+          !!i.assignees?.some((u) => String(u.id) === filters.assignee))) &&
     (!filters.epic || String(i.epic_id ?? 'none') === filters.epic || String(i.id) === filters.epic) &&
     (!filters.sprint || String(i.sprint_id ?? 'none') === filters.sprint);
   const active = Object.values(filters).some(Boolean);
@@ -117,7 +140,14 @@ export default function WorkItemFilters({
   const { filters, set, reset, active } = state;
   const choices: Record<FilterField, [string, Choice[]]> = {
     type: ['Type', issueTypes.map((t) => ({ value: t, label: label(t), icon: <TypeIcon type={t} size={14} /> }))],
-    status: ['Status', statuses.map((s) => ({ value: s, label: label(s), icon: <StatusIcon status={s} /> }))],
+    status: [
+      'Status',
+      [
+        { value: 'OPEN', label: 'Open', icon: <StatusIcon status="TODO" /> },
+        { value: 'WIP', label: 'In progress', icon: <StatusIcon status="IN_PROGRESS" /> },
+        ...statuses.map((s) => ({ value: s, label: label(s), icon: <StatusIcon status={s} /> })),
+      ],
+    ],
     priority: ['Priority', priorities.map((p) => ({ value: p, label: label(p), icon: <PriorityIcon priority={p} /> }))],
     assignee: [
       'Assignee',

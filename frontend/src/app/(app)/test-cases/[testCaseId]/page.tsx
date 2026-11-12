@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Check, Pencil, Play, Trash2, X } from 'lucide-react';
 import { useCanLead, useData, useSave } from '@/hooks/data';
 import { label, type Criterion, type Issue, type TestCase } from '@/types';
@@ -36,6 +36,7 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
 
 export default function TestCaseDetailsPage() {
   const { testCaseId } = useParams<{ testCaseId: string }>();
+  const params = useSearchParams();
   const query = useData<TestCase>(`/test-cases/${testCaseId}`);
   const tc = query.data;
   const story = useData<Issue>(`/issues/${tc?.issue_id}`, !!tc);
@@ -43,7 +44,7 @@ export default function TestCaseDetailsPage() {
   const del = useSave(`/test-cases/${testCaseId}`, 'delete', 'Test case deleted');
   const router = useRouter();
   const canLead = useCanLead(tc?.project_id);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => params.get('edit') === '1');
   const [running, setRunning] = useState(false);
   usePageProject(tc?.project_id);
   const covered = criteria.data?.filter((c) => tc?.criterion_ids.includes(c.id));

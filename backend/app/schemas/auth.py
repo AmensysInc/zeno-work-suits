@@ -72,6 +72,7 @@ class AdminUserCreate(BaseModel):
 class AdminUserUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=80)
     last_name: str | None = Field(default=None, min_length=1, max_length=80)
+    email: EmailStr | None = None
     role: Role | None = None
     is_active: bool | None = None
 

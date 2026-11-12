@@ -8,7 +8,7 @@ import { useData, useIssues } from '@/hooks/data';
 import { priorities, statuses, type Issue, type Project, type Sprint } from '@/types';
 import { PageBar, PageBody } from '@/components/layout/page';
 import { useCreateIssue } from '@/components/layout/context';
-import { Avatar, State } from '@/components/ui/display';
+import { Avatar, AvatarStack, State } from '@/components/ui/display';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/controls';
 import { Select } from '@/components/ui/select';
@@ -134,8 +134,19 @@ export default function WorkItemsPage() {
                     </Td>
                     <Td>
                       <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                        <Avatar user={i.assignee} size={20} />
-                        {i.assignee ? `${i.assignee.first_name} ${i.assignee.last_name}` : <span className="text-ink-3">Unassigned</span>}
+                        {(i.assignees?.length ?? 0) > 1 ? (
+                          <>
+                            <AvatarStack users={i.assignees!} size={20} max={3} />
+                            <span>{i.assignees!.length} people</span>
+                          </>
+                        ) : (
+                          <>
+                            <Avatar user={i.assignees?.[0] ?? i.assignee} size={20} />
+                            {(i.assignees?.[0] ?? i.assignee)
+                              ? `${(i.assignees?.[0] ?? i.assignee)!.first_name} ${(i.assignees?.[0] ?? i.assignee)!.last_name}`
+                              : <span className="text-ink-3">Unassigned</span>}
+                          </>
+                        )}
                       </span>
                     </Td>
                     <Td className="whitespace-nowrap text-[12.5px] text-ink-2">{sprints.data?.find((s) => s.id === i.sprint_id)?.name ?? (i.issue_type === 'EPIC' ? '—' : 'Backlog')}</Td>

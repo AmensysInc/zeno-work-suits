@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { AlertTriangle, Info, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { label as enumLabel } from '@/types';
 import { cn, initials } from '@/lib/utils';
@@ -218,16 +219,38 @@ export function State({ loading, error, empty, emptyText }: { loading?: boolean;
   return null;
 }
 
-export function Kpi({ label, value, hint, tone, className }: { label: ReactNode; value: ReactNode; hint?: ReactNode; tone?: string; className?: string }) {
-  return (
-    <div className={cn('flex flex-col gap-1.5 px-4 py-3.5', className)}>
+export function Kpi({
+  label,
+  value,
+  hint,
+  tone,
+  href,
+  className,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  hint?: ReactNode;
+  tone?: string;
+  href?: string;
+  className?: string;
+}) {
+  const body = (
+    <>
       <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
       <span className="tnum text-[22px] font-semibold leading-none tracking-tight" style={tone ? { color: tone } : undefined}>
         {value}
       </span>
       {hint && <span className="text-[11.5px] text-ink-3">{hint}</span>}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link href={href} className={cn('flex flex-col gap-1.5 px-4 py-3.5 transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-none', className)}>
+        {body}
+      </Link>
+    );
+  }
+  return <div className={cn('flex flex-col gap-1.5 px-4 py-3.5', className)}>{body}</div>;
 }
 
 export function Progress({ parts, className }: { parts: { value: number; color: string }[]; className?: string }) {

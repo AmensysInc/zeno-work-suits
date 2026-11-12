@@ -46,11 +46,16 @@ def traceability(project_id: int, db: DB, actor: Actor):
         .order_by(Issue.order_index, Issue.id)
     ).all()
     stories = [i for i in issues if i.issue_type == "STORY"]
-    criteria = db.scalars(
-        select(AcceptanceCriterion)
-        .where(AcceptanceCriterion.issue_id.in_([s.id for s in stories]))
-        .order_by(AcceptanceCriterion.order_index, AcceptanceCriterion.id)
-    ).all()
+    story_ids = [s.id for s in stories]
+    criteria = (
+        db.scalars(
+            select(AcceptanceCriterion)
+            .where(AcceptanceCriterion.issue_id.in_(story_ids))
+            .order_by(AcceptanceCriterion.order_index, AcceptanceCriterion.id)
+        ).all()
+        if story_ids
+        else []
+    )
     tests = db.scalars(
         select(TestCase)
         .where(TestCase.project_id == project_id)
@@ -108,4 +113,22 @@ def traceability(project_id: int, db: DB, actor: Actor):
     return {
         "epics": [brief(i) for i in issues if i.issue_type == "EPIC"],
         "stories": rows,
+        # Same issue load as above — avoids a second /issues round-trip for type filters.
+        "work_items": [
+            {
+                "id": i.id,
+                "issue_key": i.issue_key,
+                "summary": i.summary,
+                "status": i.status,
+                "priority": i.priority,
+                "issue_type": i.issue_type,
+                "epic_id": i.epic_id,
+                "sprint_id": i.sprint_id,
+                "parent_issue_id": i.parent_issue_id,
+                "related_issue_id": i.related_issue_id,
+                "assignee": user(i.assignee),
+            }
+            for i in issues
+            if i.issue_type in ("TASK", "BUG", "SUBTASK", "STORY")
+        ],
     }

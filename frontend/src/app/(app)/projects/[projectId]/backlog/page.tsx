@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Kanban, Plus, Timer } from 'lucide-react';
+import { Download, Kanban, Plus, Timer } from 'lucide-react';
 import { useCanLead, useData, useIssues } from '@/hooks/data';
 import type { Issue, Project, Sprint } from '@/types';
+import { exportIssuesXlsx } from '@/lib/export-issues';
 import { PageBar, PageBody } from '@/components/layout/page';
 import { useCreateIssue } from '@/components/layout/context';
 import { Button, LinkButton } from '@/components/ui/button';
@@ -49,6 +50,7 @@ export default function BacklogPage() {
       return next;
     });
   const inFlow = issues.filter((i) => i.issue_type !== 'EPIC' && !['BACKLOG', 'DONE'].includes(i.status) && filters.matches(i));
+  const exportRows = issues.filter(visible);
 
   return (
     <>
@@ -57,6 +59,20 @@ export default function BacklogPage() {
         projectId={pid}
         actions={
           <>
+            <Button
+              icon={<Download />}
+              disabled={!exportRows.length}
+              onClick={() =>
+                exportIssuesXlsx({
+                  filenameStem: `${project.data?.key ?? 'project'}-backlog`,
+                  issues: exportRows,
+                  sprints: all,
+                  lookupIssues: issues,
+                })
+              }
+            >
+              <span className="hidden sm:inline">Export</span>
+            </Button>
             {!kanban && canLead && (
               <Button icon={<Timer />} onClick={() => setModal({ kind: 'new' })}>
                 <span className="hidden sm:inline">Create sprint</span>

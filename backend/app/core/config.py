@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     # Model for the requirements/test generator; a larger model drafts more accurately.
     openai_model: str = "gpt-4o-mini"
+    # Issue document uploads (images, PDFs, Office files, etc.).
+    upload_dir: str = "uploads"
+    max_upload_bytes: int = 25 * 1024 * 1024
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

@@ -41,6 +41,9 @@ services:
       GITHUB_ALLOWED_OWNERS: ${GITHUB_ALLOWED_OWNERS:-[]}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -64,3 +67,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:
