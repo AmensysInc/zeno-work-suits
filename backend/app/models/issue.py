@@ -1,8 +1,26 @@
 from datetime import date
-from sqlalchemy import String, Text, ForeignKey, JSON
+from sqlalchemy import String, Text, ForeignKey, JSON, Table, Column, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 from app.models.base import Timestamps
+
+issue_assignees = Table(
+    "issue_assignees",
+    Base.metadata,
+    Column(
+        "issue_id",
+        Integer,
+        ForeignKey("issues.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "user_id",
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    ),
+)
 
 
 class Issue(Timestamps, Base):
@@ -55,6 +73,7 @@ class Issue(Timestamps, Base):
     due_date: Mapped[date | None]
     project = relationship("Project", back_populates="issues")
     assignee = relationship("User", foreign_keys=[assignee_id])
+    assignees = relationship("User", secondary=issue_assignees, order_by="User.first_name")
     reporter = relationship("User", foreign_keys=[reporter_id])
     parent = relationship("Issue", remote_side=[id], foreign_keys=[parent_issue_id])
     epic = relationship("Issue", remote_side=[id], foreign_keys=[epic_id])
@@ -71,3 +90,10 @@ class Issue(Timestamps, Base):
     comments = relationship(
         "Comment", cascade="all, delete-orphan", passive_deletes=True
     )
+    attachments = relationship(
+        "IssueAttachment", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+    @property
+    def assignee_ids(self) -> list[int]:
+        return [u.id for u in self.assignees]

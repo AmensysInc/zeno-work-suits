@@ -41,6 +41,22 @@ class TraceIssue(BaseModel):
     related_execution_id: int | None = None
 
 
+class TraceWorkItem(BaseModel):
+    """Lightweight rows for epic type filters (tasks / bugs / subtasks)."""
+
+    id: int
+    issue_key: str
+    summary: str
+    status: str
+    priority: str
+    issue_type: str
+    epic_id: int | None
+    sprint_id: int | None
+    parent_issue_id: int | None
+    related_issue_id: int | None = None
+    assignee: TraceUser | None
+
+
 class TraceStory(BaseModel):
     id: int
     issue_key: str
@@ -60,3 +76,4 @@ class TraceStory(BaseModel):
 class Traceability(BaseModel):
     epics: list[TraceIssue]
     stories: list[TraceStory]
+    work_items: list[TraceWorkItem] = []

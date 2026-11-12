@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Copy, KeyRound, MoreHorizontal, Power, Search, UserPlus } from 'lucide-react';
+import { Copy, KeyRound, MoreHorizontal, Pencil, Power, Search, UserPlus } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useData, useMe } from '@/hooks/data';
 import { label, roles, type AdminUser, type IssuedLogin, type Role } from '@/types';
@@ -28,6 +28,13 @@ const schema = z.object({
   send_email: z.boolean(),
 });
 type Form = z.infer<typeof schema>;
+
+const editSchema = z.object({
+  first_name: z.string().trim().min(1, 'First name is required').max(80),
+  last_name: z.string().trim().min(1, 'Last name is required').max(80),
+  email: z.string().email('Enter a valid email'),
+});
+type EditForm = z.infer<typeof editSchema>;
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Never');
 const roleOptions = roles.map((r) => ({ value: r, label: label(r) }));
@@ -75,6 +82,7 @@ export default function AdminUsersPage() {
   const settings = useData<{ email_configured: boolean }>('/admin/settings', !!me.data?.is_admin);
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<AdminUser | null>(null);
   const [issued, setIssued] = useState<{ login: IssuedLogin; reset: boolean } | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [search, setSearch] = useState('');
@@ -87,6 +95,12 @@ export default function AdminUsersPage() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { role: 'EMPLOYEE', send_email: true } });
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEdit,
+    formState: { errors: editErrors, isSubmitting: editSubmitting },
+  } = useForm<EditForm>({ resolver: zodResolver(editSchema) });
   const notAdmin = !!me.data && !me.data.is_admin;
   useEffect(() => {
     if (notAdmin) router.replace('/dashboard');
@@ -115,9 +129,17 @@ export default function AdminUsersPage() {
       'Temporary password created',
     );
   const update = (user: AdminUser, body: Partial<AdminUser>, done: string) => act(user, () => api.patch(`/admin/users/${user.id}`, body), done);
+  const openEdit = (user: AdminUser) => {
+    setEditing(user);
+    resetEdit({ first_name: user.first_name, last_name: user.last_name, email: user.email });
+  };
   const closeAdd = () => {
     setAdding(false);
     reset();
+  };
+  const closeEdit = () => {
+    setEditing(null);
+    resetEdit();
   };
   const list = users.data ?? [];
   const shown = list.filter((u) => (filter === 'all' || u.role === filter) && `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase().includes(search.trim().toLowerCase()));
@@ -191,6 +213,7 @@ export default function AdminUsersPage() {
                               </button>
                             }
                             items={[
+                              { label: 'Edit', icon: <Pencil />, onSelect: () => openEdit(u) },
                               { label: 'Reset password', icon: <KeyRound />, onSelect: () => resetPassword(u) },
                               ...(!self ? [{ label: u.is_active ? 'Disable' : 'Enable', icon: <Power />, danger: u.is_active, onSelect: () => update(u, { is_active: !u.is_active }, u.is_active ? 'User disabled' : 'User enabled') }] : []),
                             ]}
@@ -251,6 +274,47 @@ export default function AdminUsersPage() {
               render={({ field }) => <Checkbox disabled={!emailOn} checked={emailOn && field.value} onChange={field.onChange} label="Email the sign-in details to this user" />}
             />
             {!emailOn && <Note>Email isn’t set up yet, so you’ll copy the sign-in details on the next screen and share them yourself.</Note>}
+          </form>
+        </Dialog>
+      )}
+      {editing && (
+        <Dialog
+          title="Edit person"
+          onClose={closeEdit}
+          footer={
+            <>
+              <Button onClick={closeEdit}>Cancel</Button>
+              <Button variant="primary" type="submit" form="edit-person" loading={editSubmitting}>
+                Save changes
+              </Button>
+            </>
+          }
+        >
+          <form
+            id="edit-person"
+            className="flex flex-col gap-3.5"
+            onSubmit={handleSubmitEdit(async (data) => {
+              try {
+                await api.patch(`/admin/users/${editing.id}`, data);
+                await qc.invalidateQueries({ queryKey: ['/admin/users'] });
+                closeEdit();
+                toast.success('User updated');
+              } catch (e) {
+                toast.error(errorMessage(e));
+              }
+            })}
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="First name" error={editErrors.first_name?.message}>
+                {(id) => <Input id={id} autoFocus {...registerEdit('first_name')} />}
+              </Field>
+              <Field label="Last name" error={editErrors.last_name?.message}>
+                {(id) => <Input id={id} {...registerEdit('last_name')} />}
+              </Field>
+            </div>
+            <Field label="Email" error={editErrors.email?.message}>
+              {(id) => <Input id={id} type="email" {...registerEdit('email')} />}
+            </Field>
           </form>
         </Dialog>
       )}

@@ -1,0 +1,366 @@
+================================================================================
+Zeno TeamSuite — Session Change Summary
+Date: 2026-11-11
+App: Zeno TeamSuite (frontend Next.js + backend FastAPI)
+================================================================================
+
+This file records every feature and fix worked on in this session, with UI page
+names, routes, and exact repository paths.
+
+
+--------------------------------------------------------------------------------
+1) PEOPLE / ADMIN — Edit user name & email
+--------------------------------------------------------------------------------
+Page name : People / Admin Users
+Route     : /admin/users
+Files:
+  - frontend/src/app/(app)/admin/users/page.tsx
+  - backend/app/services/admin.py
+  - backend/app/schemas/auth.py
+
+What changed:
+  - Admins can edit a person’s first name, last name, and email.
+  - Email invite / temporary-password delivery still depends on SendGrid env
+    (SENDGRID_API_KEY, MAIL_FROM). Without those, login details are shown on
+    screen for the admin to copy.
+
+
+--------------------------------------------------------------------------------
+2) PROJECT SETTINGS — Member search when adding people
+--------------------------------------------------------------------------------
+Page name : Project Settings
+Route     : /projects/[projectId]/settings
+Files:
+  - frontend/src/app/(app)/projects/[projectId]/settings/page.tsx
+
+What changed:
+  - Add-member flow supports searching / picking people before adding them to
+    the project with a project role.
+
+
+--------------------------------------------------------------------------------
+3) CREATE / EDIT ISSUE — Issue type editable; multi-assignee; documents
+--------------------------------------------------------------------------------
+Page name : Create issue / Edit issue (dialog used across the app)
+Routes    : Opened from Backlog, Board, Work items, Issue detail, Bugs, etc.
+Files:
+  - frontend/src/components/issues/create-issue-dialog.tsx
+  - frontend/src/components/issues/assignee-picker.tsx          (NEW)
+  - frontend/src/components/issues/attachment-field.tsx         (NEW)
+  - frontend/src/components/issues/file-preview.tsx             (NEW)
+  - frontend/src/lib/attachments.ts                            (NEW)
+  - frontend/src/components/ui/dialog.tsx
+  - frontend/src/types/index.ts
+
+What changed:
+  - Issue type can be changed while editing (was previously locked/disabled).
+  - Assignees use a multi-select checkbox picker (assignee_ids).
+  - Optional Documents field below Labels for all issue types.
+  - Supports images, PDF, Word, Excel, PowerPoint, text, archives (size limits).
+  - Clicking a selected file opens a preview (images / PDF / text).
+  - Create-issue dialog uses tall layout so Cancel / Create stay at the bottom.
+
+
+--------------------------------------------------------------------------------
+4) MULTI-ASSIGNEE — Backend + UI display
+--------------------------------------------------------------------------------
+Pages / areas:
+  - Issue detail     : /issues/[issueId]
+  - Backlog          : /projects/[projectId]/backlog
+  - Sprints          : /projects/[projectId]/sprints
+  - Board (Kanban)   : /projects/[projectId]/board
+  - Work items       : /projects/[projectId]/work-items
+  - Issue lists / filters (shared components)
+
+Files:
+  Frontend:
+  - frontend/src/app/(app)/issues/[issueId]/page.tsx
+  - frontend/src/app/(app)/projects/[projectId]/work-items/page.tsx
+  - frontend/src/components/board/kanban-board.tsx
+  - frontend/src/components/issues/issue-list.tsx
+  - frontend/src/components/issues/filters.tsx
+  - frontend/src/components/ui/display.tsx                     (AvatarStack)
+  - frontend/src/types/index.ts
+
+  Backend:
+  - backend/app/models/issue.py                               (issue_assignees M2M)
+  - backend/app/migrations/versions/k5d9_issue_assignees.py   (NEW migration)
+  - backend/app/schemas/issue.py                              (assignee_ids)
+  - backend/app/services/issues.py                            (resolve/set assignees)
+  - backend/app/services/projects.py                          (unassign on member remove)
+  - backend/app/api/issues.py                                 (eager-load assignees)
+  - backend/app/services/access.py                            (eager-load on issue_access)
+  - backend/app/models/__init__.py
+
+What changed:
+  - Issues support multiple assignees via issue_assignees join table.
+  - Legacy assignee_id kept as primary/first assignee for compatibility.
+  - UI shows AvatarStack when more than one assignee.
+  - Filters match any assignee (or unassigned).
+  - Removing a project member clears them from open assigned work.
+  - Production fix: empty default assignee_ids=[] no longer wipes assignee_id.
+  - Production fix: sprint create status BACKLOG→TODO mutation preserved.
+  - Production fix: N+1 avoided by selectinload of assignee/assignees/reporter.
+
+
+--------------------------------------------------------------------------------
+5) EXCEL EXPORT — Backlog & Sprints only
+--------------------------------------------------------------------------------
+Pages:
+  - Backlog  : /projects/[projectId]/backlog
+  - Sprints  : /projects/[projectId]/sprints
+  (Overview export intentionally NOT added)
+
+Files:
+  - frontend/src/lib/export-issues.ts                         (NEW)
+  - frontend/src/app/(app)/projects/[projectId]/backlog/page.tsx
+  - frontend/src/app/(app)/projects/[projectId]/sprints/page.tsx
+  - frontend/package.json                                     (xlsx / SheetJS)
+  - frontend/package-lock.json
+
+What changed:
+  - Export current filtered issue set to .xlsx from Backlog and Sprints.
+  - Includes key fields (key, summary, type, status, priority, assignees, etc.).
+
+
+--------------------------------------------------------------------------------
+6) SUBTASK STATUS — Visible / editable in lists
+--------------------------------------------------------------------------------
+Files:
+  - frontend/src/components/issues/issue-list.tsx
+  - frontend/src/app/(app)/issues/[issueId]/page.tsx
+
+What changed:
+  - Subtasks show status controls in child/subtask lists (issue detail children).
+
+
+--------------------------------------------------------------------------------
+7) KPI CLICK FILTERS
+--------------------------------------------------------------------------------
+Pages:
+  - Project Overview : /projects/[projectId]
+  - Related filter wiring via shared filters where applicable
+
+Files:
+  - frontend/src/app/(app)/projects/[projectId]/page.tsx
+  - frontend/src/components/issues/filters.tsx
+
+What changed:
+  - Clicking overview / KPI-style controls applies matching work-item filters
+    (e.g. open / in progress style filters).
+
+
+--------------------------------------------------------------------------------
+8) PAGE BAR — Back navigation
+--------------------------------------------------------------------------------
+Component used on most app pages (Issue detail, Traceability, Settings, etc.)
+
+Files:
+  - frontend/src/components/layout/page.tsx
+
+What changed:
+  - PageBar back control uses router.back() for browser-history back.
+
+
+--------------------------------------------------------------------------------
+9) CHAT — Inventory / details (read-only context)
+--------------------------------------------------------------------------------
+Area:
+  - Workspace Chats (project chat inventory / details review)
+
+Notes:
+  - Reviewed chat inventory/details behavior as read-oriented context during
+    the session (no separate major chat rewrite called out beyond surrounding
+    product work).
+
+
+--------------------------------------------------------------------------------
+10) TEST CASES — Actions column + scroll
+--------------------------------------------------------------------------------
+Pages:
+  - Test case detail : /test-cases/[testCaseId]
+  - Test lists using TestCaseList (story / repository contexts)
+
+Files:
+  - frontend/src/components/testing/test-case-list.tsx
+  - frontend/src/app/(app)/test-cases/[testCaseId]/page.tsx
+
+What changed:
+  - Actions column / action affordances on test case lists.
+  - Scroll behavior improvements so long lists / step areas remain usable.
+
+
+--------------------------------------------------------------------------------
+11) ISSUE DOCUMENT ATTACHMENTS (upload / download / preview)
+--------------------------------------------------------------------------------
+Pages:
+  - Create / Edit issue dialog (Documents field)
+  - Issue detail Overview : /issues/[issueId]
+
+Files:
+  Frontend:
+  - frontend/src/components/issues/attachment-field.tsx         (NEW)
+  - frontend/src/components/issues/file-preview.tsx             (NEW)
+  - frontend/src/lib/attachments.ts                            (NEW)
+  - frontend/src/components/issues/create-issue-dialog.tsx
+  - frontend/src/app/(app)/issues/[issueId]/page.tsx
+  - frontend/src/types/index.ts
+
+  Backend:
+  - backend/app/models/attachment.py                           (NEW)
+  - backend/app/schemas/attachment.py                          (NEW)
+  - backend/app/services/attachments.py                        (NEW)
+  - backend/app/api/attachments.py                             (NEW)
+  - backend/app/migrations/versions/l6e0_issue_attachments.py  (NEW)
+  - backend/app/main.py                                        (router registered)
+  - backend/app/models/issue.py                                (attachments relationship)
+  - backend/app/models/__init__.py
+  - backend/app/core/config.py                                 (upload_dir, max_upload_bytes)
+  - backend/app/services/issues.py                             (purge files on delete)
+  - backend/tests/test_attachments.py                          (NEW)
+  - backend/Dockerfile                                         (uploads dir ownership)
+  - docker-compose.prod.yml                                    (uploads volume + UPLOAD_DIR)
+  - .gitignore                                                 (uploads/)
+
+API endpoints:
+  - GET    /api/issues/{issue_id}/attachments
+  - POST   /api/issues/{issue_id}/attachments   (multipart files)
+  - GET    /api/attachments/{id}/download
+  - DELETE /api/attachments/{id}
+
+What changed:
+  - Optional multi-file documents on create/edit for every issue type.
+  - Stored on disk under upload_dir / {project_id}/{issue_id}/.
+  - Issue overview lists documents with preview + download.
+  - Production: authenticated blob download (token header), uploader eager-load
+    to avoid N+1, persistent Docker volume `uploads`.
+
+
+--------------------------------------------------------------------------------
+12) TRACEABILITY — Epic work-type filter
+--------------------------------------------------------------------------------
+Page name : Traceability
+Route     : /projects/[projectId]/traceability
+
+Files:
+  - frontend/src/app/(app)/projects/[projectId]/traceability/page.tsx
+  - frontend/src/types/index.ts                                (TraceWorkItem)
+  - backend/app/api/quality.py                                 (work_items payload)
+  - backend/app/schemas/quality.py                             (TraceWorkItem)
+
+What changed:
+  - When an epic is selected, a type dropdown appears between Epic and Sprint.
+  - Options: Story, Tasks, Bugs, Subtasks.
+  - Story keeps the full criteria / tests / defects table.
+  - Tasks / Bugs / Subtasks show a lightweight work-item table for that epic.
+  - Production: no second /issues fetch — work_items come from the same
+    traceability response (avoids duplicate load / delay).
+  - Guard against empty-story criteria IN () query.
+
+
+--------------------------------------------------------------------------------
+13) DIALOG LAYOUT FIX
+--------------------------------------------------------------------------------
+Files:
+  - frontend/src/components/ui/dialog.tsx
+  - frontend/src/components/issues/create-issue-dialog.tsx
+  - frontend/src/components/issues/file-preview.tsx
+
+What changed:
+  - Added `tall` dialog mode (viewport height) so footer actions stay pinned
+    to the bottom while the form body scrolls.
+
+
+--------------------------------------------------------------------------------
+14) PRODUCTION HARDENING (session verification)
+--------------------------------------------------------------------------------
+Files touched for safety:
+  - backend/app/services/issues.py          (assignee resolve + create status)
+  - backend/app/api/issues.py               (selectinload IssueOut relations)
+  - backend/app/services/access.py          (selectinload on issue_access)
+  - backend/app/services/attachments.py     (selectinload uploader)
+  - backend/app/api/quality.py              (work_items + empty criteria guard)
+  - docker-compose.prod.yml                 (uploads volume)
+  - backend/Dockerfile                      (uploads directory)
+
+Deploy notes:
+  1. Run: alembic upgrade head
+       Migrations:
+         - k5d9_issue_assignees
+         - l6e0_issue_attachments
+  2. Deploy backend (with UPLOAD_DIR=/app/uploads and uploads volume in prod).
+  3. Deploy frontend (npm build / container).
+
+Tests added / re-checked:
+  - backend/tests/test_attachments.py
+  - assignee / sprint / QA regression tests re-run during verification.
+
+
+--------------------------------------------------------------------------------
+QUICK PAGE → PATH INDEX
+--------------------------------------------------------------------------------
+Admin Users (People)
+  /admin/users
+  frontend/src/app/(app)/admin/users/page.tsx
+
+Project Overview
+  /projects/[projectId]
+  frontend/src/app/(app)/projects/[projectId]/page.tsx
+
+Project Settings
+  /projects/[projectId]/settings
+  frontend/src/app/(app)/projects/[projectId]/settings/page.tsx
+
+Backlog
+  /projects/[projectId]/backlog
+  frontend/src/app/(app)/projects/[projectId]/backlog/page.tsx
+
+Sprints
+  /projects/[projectId]/sprints
+  frontend/src/app/(app)/projects/[projectId]/sprints/page.tsx
+
+Board
+  /projects/[projectId]/board
+  frontend/src/components/board/kanban-board.tsx
+
+Work items
+  /projects/[projectId]/work-items
+  frontend/src/app/(app)/projects/[projectId]/work-items/page.tsx
+
+Traceability
+  /projects/[projectId]/traceability
+  frontend/src/app/(app)/projects/[projectId]/traceability/page.tsx
+
+Issue detail
+  /issues/[issueId]
+  frontend/src/app/(app)/issues/[issueId]/page.tsx
+
+Test case detail
+  /test-cases/[testCaseId]
+  frontend/src/app/(app)/test-cases/[testCaseId]/page.tsx
+
+Shared create/edit issue dialog
+  frontend/src/components/issues/create-issue-dialog.tsx
+
+
+--------------------------------------------------------------------------------
+NEW FILES ADDED THIS SESSION
+--------------------------------------------------------------------------------
+backend/app/api/attachments.py
+backend/app/models/attachment.py
+backend/app/schemas/attachment.py
+backend/app/services/attachments.py
+backend/app/migrations/versions/k5d9_issue_assignees.py
+backend/app/migrations/versions/l6e0_issue_attachments.py
+backend/tests/test_attachments.py
+frontend/src/components/issues/assignee-picker.tsx
+frontend/src/components/issues/attachment-field.tsx
+frontend/src/components/issues/file-preview.tsx
+frontend/src/lib/attachments.ts
+frontend/src/lib/export-issues.ts
+changes/2026-11-11-session-changes.txt   (this file)
+
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------

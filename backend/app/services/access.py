@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy import select, or_
+from sqlalchemy.orm import selectinload
 from app.models import Project, Issue, User
 from app.models.project import project_members
 
@@ -57,7 +58,15 @@ def project_access(db, project_id, actor, owner=False, lock=False):
 
 
 def issue_access(db, issue_id, actor):
-    issue = db.get(Issue, issue_id)
+    issue = db.scalar(
+        select(Issue)
+        .where(Issue.id == issue_id)
+        .options(
+            selectinload(Issue.assignee),
+            selectinload(Issue.assignees),
+            selectinload(Issue.reporter),
+        )
+    )
     if not issue:
         raise HTTPException(404, "Issue not found")
     project_access(db, issue.project_id, actor)

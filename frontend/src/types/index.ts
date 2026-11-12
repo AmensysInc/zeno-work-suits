@@ -215,6 +215,7 @@ export interface Issue {
   status: (typeof statuses)[number];
   priority: (typeof priorities)[number];
   assignee_id: number | null;
+  assignee_ids?: number[];
   reporter_id: number;
   parent_issue_id: number | null;
   epic_id: number | null;
@@ -231,9 +232,20 @@ export interface Issue {
   related_test_case_id: number | null;
   related_execution_id: number | null;
   assignee: User | null;
+  assignees?: User[];
   reporter: User;
   /** When a Done item was last moved to Done (issue lists only). */
   resolved_at?: string | null;
+}
+export interface IssueAttachment {
+  id: number;
+  issue_id: number;
+  uploader_id: number;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+  uploader: User;
 }
 export interface Sprint {
   id: number;
@@ -378,9 +390,23 @@ export interface TraceStory {
   test_cases: TraceTest[];
   bugs: TraceIssue[];
 }
+export interface TraceWorkItem {
+  id: number;
+  issue_key: string;
+  summary: string;
+  status: Issue['status'];
+  priority: Issue['priority'];
+  issue_type: Issue['issue_type'];
+  epic_id: number | null;
+  sprint_id: number | null;
+  parent_issue_id: number | null;
+  related_issue_id: number | null;
+  assignee: TraceUser | null;
+}
 export interface Traceability {
   epics: TraceIssue[];
   stories: TraceStory[];
+  work_items?: TraceWorkItem[];
 }
 type ReportUser = Pick<User, 'id' | 'first_name' | 'last_name'>;
 export interface ProjectReport {

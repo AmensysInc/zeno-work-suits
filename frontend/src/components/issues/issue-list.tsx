@@ -4,11 +4,12 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useProjects } from '@/hooks/data';
-import type { Issue, Sprint } from '@/types';
-import { Avatar, Empty, Tag, projectColor } from '@/components/ui/display';
+import { label, statuses, type Issue, type Sprint } from '@/types';
+import { Avatar, AvatarStack, Empty, Tag, projectColor } from '@/components/ui/display';
 import { IssueKey, Points, PriorityIcon, StatusIcon, StatusPill, TypeIcon } from '@/components/ui/glyphs';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/controls';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 const PAGE = 20;
@@ -16,6 +17,7 @@ const PAGE = 20;
 /**
  * Dense issue rows. `showProject` adds the project for lists spanning several
  * projects; `sprints` shows points and sprint instead of the status pill.
+ * Pass `onStatusChange` to edit status inline (e.g. subtasks).
  */
 export default function IssueList({
   issues,
@@ -25,6 +27,8 @@ export default function IssueList({
   highlight,
   empty,
   trailing,
+  onStatusChange,
+  statusBusyId,
 }: {
   issues: Issue[];
   sprints?: Sprint[];
@@ -33,6 +37,8 @@ export default function IssueList({
   highlight?: (text: string) => ReactNode;
   empty?: ReactNode;
   trailing?: (i: Issue) => ReactNode;
+  onStatusChange?: (issue: Issue, status: Issue['status']) => void;
+  statusBusyId?: number | null;
 }) {
   const projects = useProjects();
   const router = useRouter();
@@ -58,7 +64,7 @@ export default function IssueList({
             <PriorityIcon priority={i.priority} />
             <IssueKey className="hidden w-[70px] sm:inline">{i.issue_key}</IssueKey>
             <TypeIcon type={i.issue_type} size={15} />
-            {!sprints && <StatusIcon status={i.status} />}
+            {!sprints && !onStatusChange && <StatusIcon status={i.status} />}
             <Link href={`/issues/${i.id}`} onClick={(e) => e.stopPropagation()} className="min-w-0 flex-1 truncate font-medium hover:text-accent-ink">
               {highlight ? highlight(i.summary) : i.summary}
             </Link>
@@ -79,13 +85,29 @@ export default function IssueList({
                 <span className="hidden w-24 truncate text-xs text-ink-3 sm:inline">{sprints.find((s) => s.id === i.sprint_id)?.name ?? 'Backlog'}</span>
                 <Points value={i.story_points} />
               </>
+            ) : onStatusChange ? (
+              <div className="w-36 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <Select<Issue['status']>
+                  size="sm"
+                  aria-label={`Status for ${i.issue_key}`}
+                  className="w-full"
+                  value={i.status}
+                  disabled={statusBusyId === i.id}
+                  onChange={(v) => onStatusChange(i, v)}
+                  options={statuses.map((s) => ({ value: s, label: label(s), icon: <StatusIcon status={s} /> }))}
+                />
+              </div>
             ) : (
               <span className="hidden lg:inline">
                 <StatusPill status={i.status} />
               </span>
             )}
             {trailing?.(i)}
-            <Avatar user={i.assignee} size={20} />
+            {(i.assignees?.length ?? 0) > 1 ? (
+              <AvatarStack users={i.assignees!} size={20} max={3} />
+            ) : (
+              <Avatar user={i.assignees?.[0] ?? i.assignee} size={20} />
+            )}
           </div>
         );
       })}

@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy import select, update as sql_update, insert
+from sqlalchemy import or_, select, update as sql_update, insert
 from sqlalchemy.exc import IntegrityError
 from app.models import Project, User, Issue
 from app.models.base import now
@@ -100,11 +100,13 @@ def remove_member(db, id, user_id, actor):
     for issue in db.scalars(
         select(Issue).where(
             Issue.project_id == p.id,
-            Issue.assignee_id == user_id,
             Issue.status != "DONE",
+            or_(Issue.assignee_id == user_id, Issue.assignees.any(id=user_id)),
         )
     ):
-        issue.assignee_id = None
+        remaining = [u for u in issue.assignees if u.id != user_id]
+        issue.assignees = remaining
+        issue.assignee_id = remaining[0].id if remaining else None
     db.commit()
     db.refresh(p)
     return p

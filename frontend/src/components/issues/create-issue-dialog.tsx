@@ -1,17 +1,25 @@
 'use client';
 
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
 import { useData, useProjects, useSave } from '@/hooks/data';
-import { issueTypes, label, priorities, type Issue, type Project, type Sprint } from '@/types';
+import { api, errorMessage } from '@/lib/api';
+import { uploadIssueAttachments } from '@/lib/attachments';
+import { issueTypes, label, priorities, type Issue, type IssueAttachment, type Project, type Sprint } from '@/types';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/input';
 import { Select, type Option } from '@/components/ui/select';
-import { Avatar, Note, ProjectMark } from '@/components/ui/display';
+import { Note, ProjectMark } from '@/components/ui/display';
 import { PriorityIcon, TypeIcon } from '@/components/ui/glyphs';
+import AssigneePicker from '@/components/issues/assignee-picker';
+import AttachmentField, { formatAttachmentSize } from '@/components/issues/attachment-field';
+import FilePreview, { type PreviewTarget } from '@/components/issues/file-preview';
 import { cn } from '@/lib/utils';
+import { Paperclip, Trash2 } from 'lucide-react';
 
 const nullable = z.preprocess((v) => (v === '' || v === null || v === undefined ? null : Number(v)), z.number().nullable());
 const schema = z.object({
@@ -20,7 +28,7 @@ const schema = z.object({
   summary: z.string().trim().min(1, 'Summary is required').max(300),
   description: z.string(),
   priority: z.enum(priorities),
-  assignee_id: nullable,
+  assignee_ids: z.array(z.number()),
   epic_id: nullable,
   parent_issue_id: nullable,
   sprint_id: nullable,
@@ -30,8 +38,20 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 const NONE = 0;
 
+const initialAssignees = (issue: Partial<Issue>) =>
+  issue.assignee_ids?.length
+    ? issue.assignee_ids
+    : issue.assignees?.length
+      ? issue.assignees.map((u) => u.id)
+      : issue.assignee_id
+        ? [issue.assignee_id]
+        : [];
+
 export default function CreateIssueDialog({ initial, onClose }: { initial: Partial<Issue>; onClose: () => void }) {
   const projects = useProjects();
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const { control, register, handleSubmit, watch, setValue, formState } = useForm<z.input<typeof schema>, unknown, Values>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -45,7 +65,7 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
       parent_issue_id: initial.parent_issue_id ?? null,
       epic_id: initial.epic_id ?? null,
       sprint_id: initial.sprint_id ?? null,
-      assignee_id: initial.assignee_id ?? null,
+      assignee_ids: initialAssignees(initial),
     },
   });
   const pid = Number(watch('project_id'));
@@ -53,10 +73,11 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
   const project = useData<Project>(`/projects/${pid}`, !!pid);
   const issues = useData<Issue[]>(`/issues?project_id=${pid}`, !!pid);
   const sprints = useData<Sprint[]>(`/projects/${pid}/sprints`, !!pid);
+  const existing = useData<IssueAttachment[]>(`/issues/${initial.id}/attachments`, !!initial.id);
   const save = useSave(initial.id ? `/issues/${initial.id}` : '/issues', initial.id ? 'put' : 'post', initial.id ? 'Issue updated' : 'Issue created');
 
   /** A select bound to a nullable id field; 0 stands for "none". */
-  const pick = (name: 'epic_id' | 'parent_issue_id' | 'assignee_id' | 'sprint_id', options: Option<number>[], ariaLabel: string) => (
+  const pick = (name: 'epic_id' | 'parent_issue_id' | 'sprint_id', options: Option<number>[], ariaLabel: string) => (
     <Controller
       control={control}
       name={name}
@@ -71,22 +92,45 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
     />
   );
 
+  const removeExisting = async (attachment: IssueAttachment) => {
+    try {
+      await api.delete(`/attachments/${attachment.id}`);
+      await existing.refetch();
+      toast.success('Attachment removed');
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+
   const submit = handleSubmit(async (data) => {
     try {
-      const { project_id, issue_type, ...rest } = data;
-      await save.mutateAsync({
+      const { project_id, issue_type, assignee_ids, ...rest } = data;
+      const issue = (await save.mutateAsync({
         ...rest,
+        issue_type,
+        assignee_ids,
+        assignee_id: assignee_ids[0] ?? null,
         ...(!initial.id
           ? {
               project_id,
-              issue_type,
               related_issue_id: initial.related_issue_id,
               related_test_case_id: initial.related_test_case_id,
               related_execution_id: initial.related_execution_id,
             }
           : {}),
         labels: data.labels.split(',').map((s) => s.trim()).filter(Boolean),
-      });
+      })) as Issue;
+      if (files.length) {
+        setUploading(true);
+        try {
+          await uploadIssueAttachments(issue.id, files);
+        } catch (e) {
+          toast.error(errorMessage(e));
+          return;
+        } finally {
+          setUploading(false);
+        }
+      }
       onClose();
     } catch {
       /* toast shown by useSave */
@@ -95,15 +139,17 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
 
   const errors = Object.values(formState.errors).map((e) => e?.message).filter(Boolean);
   return (
+    <>
     <Dialog
       onClose={onClose}
       width={720}
+      tall
       title={initial.id ? 'Edit issue' : initial.related_test_case_id ? 'Create bug' : 'Create issue'}
       description={initial.id ? undefined : 'New issues start in the backlog, or To do in an active sprint.'}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={save.isPending} onClick={submit}>
+          <Button variant="primary" loading={save.isPending || uploading} onClick={submit}>
             {initial.id ? 'Save changes' : 'Create issue'}
           </Button>
         </>
@@ -127,7 +173,8 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
                 disabled={!!initial.id}
                 onChange={(v) => {
                   setValue('project_id', v);
-                  for (const f of ['epic_id', 'parent_issue_id', 'sprint_id', 'assignee_id'] as const) setValue(f, null);
+                  for (const f of ['epic_id', 'parent_issue_id', 'sprint_id'] as const) setValue(f, null);
+                  setValue('assignee_ids', []);
                 }}
                 options={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name, icon: <ProjectMark project={p} size={16} /> }))}
               />
@@ -146,10 +193,18 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
                       type="button"
                       role="radio"
                       aria-checked={field.value === t}
-                      disabled={!!initial.id}
-                      onClick={() => field.onChange(t)}
+                      onClick={() => {
+                        field.onChange(t);
+                        if (t === 'EPIC') {
+                          setValue('epic_id', null);
+                          setValue('parent_issue_id', null);
+                          setValue('sprint_id', null);
+                        } else if (t !== 'SUBTASK') {
+                          setValue('parent_issue_id', null);
+                        }
+                      }}
                       className={cn(
-                        'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-ink-2 hover:bg-hover disabled:opacity-60',
+                        'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-ink-2 hover:bg-hover',
                         field.value === t && 'bg-hover text-ink ring-1 ring-line-2',
                       )}
                     >
@@ -203,17 +258,20 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
               />
             )}
           </Field>
-          <Field label="Assignee">
-            {() =>
-              pick(
-                'assignee_id',
-                [
-                  { value: NONE, label: 'Unassigned', icon: <Avatar user={null} size={16} /> },
-                  ...(project.data?.members ?? []).map((u) => ({ value: u.id, label: `${u.first_name} ${u.last_name}`, icon: <Avatar user={u} size={16} /> })),
-                ],
-                'Assignee',
-              )
-            }
+          <Field label="Assignees">
+            {() => (
+              <Controller
+                control={control}
+                name="assignee_ids"
+                render={({ field }) => (
+                  <AssigneePicker
+                    members={project.data?.members ?? []}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+            )}
           </Field>
           <Field label="Story points">{(id) => <Input id={id} type="number" min={0} {...register('story_points')} />}</Field>
           <Field label="Sprint">
@@ -255,9 +313,55 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
         <Field label="Labels" hint="Separate with commas">
           {(id) => <Input id={id} placeholder="frontend, leave" {...register('labels')} />}
         </Field>
+        <Field label="Documents" optional hint="Optional. Works for every issue type.">
+          {(id) => (
+            <div className="flex flex-col gap-2">
+              {!!initial.id && (existing.data?.length ?? 0) > 0 && (
+                <ul className="flex flex-col gap-1">
+                  {existing.data!.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center gap-2 rounded-md border border-line bg-subtle px-2.5 py-1.5 text-[12.5px]"
+                    >
+                      <Paperclip className="size-3.5 shrink-0 text-ink-3" />
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-left font-medium text-accent-ink hover:underline"
+                        onClick={() =>
+                          setPreview({
+                            kind: 'remote',
+                            id: item.id,
+                            filename: item.filename,
+                            contentType: item.content_type,
+                          })
+                        }
+                      >
+                        {item.filename}
+                      </button>
+                      <span className="shrink-0 text-ink-3">{formatAttachmentSize(item.size_bytes)}</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0 px-1"
+                        aria-label={`Remove ${item.filename}`}
+                        onClick={() => removeExisting(item)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <AttachmentField id={id} files={files} onChange={setFiles} />
+            </div>
+          )}
+        </Field>
         {errors.length > 0 && <Note tone="red">{errors.join(' · ')}</Note>}
         <button type="submit" hidden />
       </form>
     </Dialog>
+    <FilePreview target={preview} onClose={() => setPreview(null)} />
+    </>
   );
 }

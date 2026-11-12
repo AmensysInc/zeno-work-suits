@@ -16,6 +16,7 @@ class IssueIn(BaseModel):
     status: Status = "BACKLOG"
     priority: Priority = "MEDIUM"
     assignee_id: int | None = None
+    assignee_ids: list[int] = Field(default_factory=list, max_length=50)
     parent_issue_id: int | None = None
     epic_id: int | None = None
     sprint_id: int | None = None
@@ -30,11 +31,13 @@ class IssueIn(BaseModel):
 
 
 class IssueUpdate(BaseModel):
+    issue_type: IssueType | None = None
     summary: str | None = Field(default=None, min_length=1, max_length=300)
     description: str | None = None
     status: Status | None = None
     priority: Priority | None = None
     assignee_id: int | None = None
+    assignee_ids: list[int] | None = Field(default=None, max_length=50)
     parent_issue_id: int | None = None
     epic_id: int | None = None
     sprint_id: int | None = None
@@ -54,6 +57,7 @@ class IssueOut(IssueIn):
     created_at: datetime
     updated_at: datetime
     assignee: UserOut | None
+    assignees: list[UserOut] = []
     reporter: UserOut
     # When a Done issue was last moved to Done; set by the issue list only.
     resolved_at: datetime | None = None

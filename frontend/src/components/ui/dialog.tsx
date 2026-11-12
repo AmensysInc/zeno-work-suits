@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import * as D from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,8 @@ export function Dialog({
   footer,
   width = 540,
   className,
+  /** Stretch to the viewport so the footer stays on the bottom edge. */
+  tall = false,
 }: {
   open?: boolean;
   onClose: () => void;
@@ -24,19 +26,35 @@ export function Dialog({
   footer?: ReactNode;
   width?: number;
   className?: string;
+  tall?: boolean;
 }) {
+  const style: CSSProperties = {
+    width: `min(${width}px, calc(100vw - 32px))`,
+    maxHeight: 'calc(100vh - 32px)',
+    ...(tall
+      ? {
+          height: 'calc(100vh - 32px)',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+        }
+      : {
+          top: '8vh',
+          transform: 'translateX(-50%)',
+        }),
+  };
+
   return (
     <D.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-40 bg-[var(--overlay)] data-[state=open]:animate-in" />
         <D.Content
-          style={{ width: `min(${width}px, calc(100vw - 32px))` }}
+          style={style}
           className={cn(
-            'fixed left-1/2 top-[8vh] z-50 flex max-h-[84vh] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-line bg-raised shadow-lg outline-none',
+            'fixed left-1/2 z-50 flex flex-col overflow-hidden rounded-xl border border-line bg-raised shadow-lg outline-none',
             className,
           )}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-line px-[18px] py-3.5">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-line px-[18px] py-3.5">
             <div className="flex min-w-0 flex-col gap-0.5">
               <D.Title className="text-[14px] font-semibold">{title}</D.Title>
               {description ? (
@@ -49,9 +67,9 @@ export function Dialog({
               <X className="size-4" />
             </D.Close>
           </div>
-          <div className="scrollbar-thin flex-1 overflow-y-auto p-[18px]">{children}</div>
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-[18px]">{children}</div>
           {footer && (
-            <div className="flex items-center justify-end gap-2 border-t border-line bg-subtle px-[18px] py-3">
+            <div className="mt-auto flex shrink-0 items-center justify-end gap-2 border-t border-line bg-subtle px-[18px] py-3">
               {footer}
             </div>
           )}

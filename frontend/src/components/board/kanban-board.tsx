@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { CornerDownRight, GripVertical, MoreHorizontal, Plus } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { statuses, type Issue } from '@/types';
-import { Avatar, Tag, projectColor } from '@/components/ui/display';
+import { Avatar, AvatarStack, Tag, projectColor } from '@/components/ui/display';
 import { Menu } from '@/components/ui/controls';
 import { IssueKey, Points, PriorityIcon, StatusIcon, TypeIcon, statusMeta } from '@/components/ui/glyphs';
 import { useCreateIssue } from '@/components/layout/context';
@@ -63,7 +63,11 @@ function Card({ issue, subtasks, pending, onStatus }: { issue: Issue; subtasks?:
         )}
         <span className="flex-1" />
         <Points value={issue.story_points} />
-        <Avatar user={issue.assignee} size={20} />
+        {(issue.assignees?.length ?? 0) > 1 ? (
+          <AvatarStack users={issue.assignees!} size={20} max={3} />
+        ) : (
+          <Avatar user={issue.assignees?.[0] ?? issue.assignee} size={20} />
+        )}
       </div>
     </article>
   );

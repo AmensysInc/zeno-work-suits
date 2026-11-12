@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Menu as MenuIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Menu as MenuIcon } from 'lucide-react';
 import { useData } from '@/hooks/data';
 import { cn } from '@/lib/utils';
 import type { Project } from '@/types';
@@ -21,6 +22,7 @@ export function PageBar({
   projectId?: number;
   actions?: ReactNode;
 }) {
+  const router = useRouter();
   const openNav = useOpenNav();
   const project = useData<Project>(`/projects/${projectId}`, !!projectId);
   const all: Crumb[] = project.data ? [{ label: project.data.name, href: `/projects/${project.data.id}` }, ...crumbs] : crumbs;
@@ -28,6 +30,15 @@ export function PageBar({
     <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-3 sm:px-4 lg:pl-[18px]">
       <button aria-label="Open navigation" onClick={openNav} className="flex size-7 items-center justify-center rounded-md text-ink-2 hover:bg-hover lg:hidden">
         <MenuIcon className="size-4" />
+      </button>
+      <button
+        type="button"
+        aria-label="Go back"
+        title="Go back"
+        onClick={() => router.back()}
+        className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-2 hover:bg-hover hover:text-ink"
+      >
+        <ArrowLeft className="size-4" />
       </button>
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-ink-2">
         {project.data && <ProjectMark project={project.data} size={16} />}

@@ -67,10 +67,30 @@ export default function ProjectPage() {
             </div>
 
             <Card className="grid grid-cols-2 lg:grid-cols-4 [&>*:not(:first-child)]:border-l [&>*]:border-line">
-              <Kpi label="Open work items" value={work.filter((i) => i.status !== 'DONE').length} hint={`${work.length} total`} />
-              <Kpi label="In progress" value={work.filter((i) => ['IN_PROGRESS', 'CODE_REVIEW', 'TESTING'].includes(i.status)).length} tone="#d97706" />
-              <Kpi label="Done" value={work.filter((i) => i.status === 'DONE').length} tone="#16a34a" />
-              <Kpi label="Open bugs" value={work.filter((i) => i.issue_type === 'BUG' && i.status !== 'DONE').length} tone="#e5484d" />
+              <Kpi
+                label="Open work items"
+                value={work.filter((i) => i.status !== 'DONE').length}
+                hint={`${work.length} total`}
+                href={`/projects/${pid}/work-items?status=OPEN`}
+              />
+              <Kpi
+                label="In progress"
+                value={work.filter((i) => ['IN_PROGRESS', 'CODE_REVIEW', 'TESTING'].includes(i.status)).length}
+                tone="#d97706"
+                href={`/projects/${pid}/work-items?status=WIP`}
+              />
+              <Kpi
+                label="Done"
+                value={work.filter((i) => i.status === 'DONE').length}
+                tone="#16a34a"
+                href={`/projects/${pid}/work-items?status=DONE`}
+              />
+              <Kpi
+                label="Open bugs"
+                value={work.filter((i) => i.issue_type === 'BUG' && i.status !== 'DONE').length}
+                tone="#e5484d"
+                href={`/projects/${pid}/bugs`}
+              />
             </Card>
 
             <Card className="flex flex-col gap-6 p-[18px] lg:flex-row">

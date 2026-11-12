@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Response
 from sqlalchemy import func, select, or_
+from sqlalchemy.orm import selectinload
 from app.api.deps import DB, Actor
 from app.models import ActivityLog, Issue, Project
 from app.schemas.issue import (
@@ -14,13 +15,24 @@ from app.services import issues
 
 router = APIRouter(prefix="/issues", tags=["Issues"])
 
+# IssueOut always serializes these; load them once per request.
+_ISSUE_OUT = (
+    selectinload(Issue.assignee),
+    selectinload(Issue.assignees),
+    selectinload(Issue.reporter),
+)
+
 
 @router.get("", response_model=list[IssueOut])
 def index(
     db: DB, actor: Actor, project_id: int | None = None, q: str = "", mine: bool = False
 ):
-    query = select(Issue).where(
-        Issue.project_id.in_(visible_projects(actor).with_only_columns(Project.id))
+    query = (
+        select(Issue)
+        .where(
+            Issue.project_id.in_(visible_projects(actor).with_only_columns(Project.id))
+        )
+        .options(*_ISSUE_OUT)
     )
     if project_id:
         project_access(db, project_id, actor)
@@ -30,7 +42,12 @@ def index(
             or_(Issue.summary.ilike(f"%{q}%"), Issue.issue_key.ilike(f"%{q}%"))
         )
     if mine:
-        query = query.where(Issue.assignee_id == actor.id)
+        query = query.where(
+            or_(
+                Issue.assignee_id == actor.id,
+                Issue.assignees.any(id=actor.id),
+            )
+        )
     items = db.scalars(query.order_by(Issue.order_index, Issue.id)).all()
     # When each finished issue was last moved to Done, as the reports count it.
     done_ids = [i.id for i in items if i.status == "DONE"]

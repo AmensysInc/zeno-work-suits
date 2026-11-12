@@ -1,10 +1,10 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Trash2, UserPlus } from 'lucide-react';
+import { Search, Trash2, UserPlus, X } from 'lucide-react';
 import { useData, useMe, useSave } from '@/hooks/data';
-import { canManageProject, label, projectRoles, type Project, type ProjectRole, type TeamMember } from '@/types';
+import { canManageProject, label, projectRoles, type Project, type ProjectRole, type TeamMember, type User } from '@/types';
 import { PageBar, PageBody } from '@/components/layout/page';
 import { Avatar, Badge, Card, CardHeader, Note, State } from '@/components/ui/display';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { confirm } from '@/components/ui/confirm';
 import ProjectFields from '@/components/projects/project-fields';
 
 const roleOptions = projectRoles.map((r) => ({ value: r, label: label(r) }));
+const fullName = (u: User) => `${u.first_name} ${u.last_name}`;
 
 function MemberRow({ project, member: { user, role }, canManage }: { project: Project; member: TeamMember; canManage: boolean }) {
   const remove = useSave(`/projects/${project.id}/members/${user.id}`, 'delete', 'Member removed');
@@ -127,15 +128,129 @@ function GeneralForm({ p, canManage }: { p: Project; canManage: boolean }) {
   );
 }
 
+function AddMemberForm({ project }: { project: Project }) {
+  const people = useData<User[]>('/auth/users');
+  const member = useSave(`/projects/${project.id}/members`, 'post', 'Member added');
+  const [query, setQuery] = useState('');
+  const [picked, setPicked] = useState<User | null>(null);
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<ProjectRole>('DEVELOPER');
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const onTeam = useMemo(() => new Set(project.team.map((m) => m.user.id)), [project.team]);
+  const matches = useMemo(() => {
+    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return (people.data ?? [])
+      .filter((u) => !onTeam.has(u.id))
+      .filter((u) => {
+        if (!tokens.length) return true;
+        const hay = `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase();
+        return tokens.every((t) => hay.includes(t));
+      })
+      .slice(0, 8);
+  }, [people.data, onTeam, query]);
+
+  const clearPick = () => {
+    setPicked(null);
+    setQuery('');
+    setOpen(false);
+  };
+
+  const showResults = open && !picked;
+
+  return (
+    <form
+      className="flex flex-col gap-2 border-t border-line bg-subtle px-4 py-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!picked) return;
+        try {
+          await member.mutateAsync({ user_ids: [picked.id], role });
+          clearPick();
+        } catch {
+          /* toast */
+        }
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <div ref={box} className="min-w-[220px] flex-1">
+          {picked ? (
+            <div className="flex h-8 items-center gap-2 rounded-md border border-line-2 bg-surface px-2">
+              <Avatar user={picked} size={20} />
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{fullName(picked)}</span>
+              <button type="button" aria-label="Clear selection" className="rounded p-0.5 text-ink-3 hover:bg-hover hover:text-ink" onClick={clearPick}>
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : (
+            <Input
+              size="sm"
+              icon={<Search />}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              aria-label="Search people"
+              placeholder="Search by name or email…"
+              autoComplete="off"
+              className="w-full"
+            />
+          )}
+        </div>
+        <Select<ProjectRole> aria-label="Project role" className="w-36" value={role} onChange={setRole} options={roleOptions} />
+        <Button type="submit" variant="primary" icon={<UserPlus />} loading={member.isPending} disabled={!picked}>
+          Add
+        </Button>
+      </div>
+      {showResults && (
+        <div className="max-h-56 overflow-y-auto rounded-lg border border-line bg-surface">
+          {people.isLoading && <p className="px-3 py-2.5 text-[12.5px] text-ink-3">Loading people…</p>}
+          {people.error && <p className="px-3 py-2.5 text-[12.5px] text-red-600">Unable to load people. Try refreshing the page.</p>}
+          {!people.isLoading && !people.error && !matches.length && (
+            <p className="px-3 py-2.5 text-[12.5px] text-ink-3">{query.trim() ? 'No matching people.' : 'Everyone is already on this project.'}</p>
+          )}
+          {matches.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              className="flex w-full items-center gap-2.5 border-b border-line px-3 py-2 text-left last:border-b-0 hover:bg-hover"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setPicked(u);
+                setQuery('');
+                setOpen(false);
+              }}
+            >
+              <Avatar user={u} size={24} />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-[13px] font-medium">{fullName(u)}</span>
+                <span className="truncate text-xs text-ink-3">{u.email}</span>
+              </span>
+              <Badge value={u.role} />
+            </button>
+          ))}
+        </div>
+      )}
+    </form>
+  );
+}
+
 export default function ProjectSettingsPage() {
   const projectId = Number(useParams<{ projectId: string }>().projectId);
   const query = useData<Project>(`/projects/${projectId}`);
   const me = useMe();
   const router = useRouter();
-  const member = useSave(`/projects/${projectId}/members`, 'post', 'Member added');
   const del = useSave(`/projects/${projectId}`, 'delete', 'Project deleted');
-  const [role, setRole] = useState<ProjectRole>('DEVELOPER');
-  const addForm = useRef<HTMLFormElement>(null);
   const p = query.data;
   const canManage = !!p && canManageProject(me.data, p);
   return (
@@ -152,35 +267,14 @@ export default function ProjectSettingsPage() {
                 <CardHeader title="General" subtitle="Details, schedule and workflow" />
                 <GeneralForm key={p.updated_at} p={p} canManage={canManage} />
               </Card>
-              <Card className="overflow-hidden">
+              <Card>
                 <CardHeader title={`Members · ${p.team.length}`} subtitle="Who can work in this project" className="pb-3" />
-                <div className="border-t border-line">
+                <div className="overflow-hidden border-t border-line">
                   {p.team.map((m) => (
                     <MemberRow key={m.user.id} project={p} member={m} canManage={canManage} />
                   ))}
                 </div>
-                {canManage && (
-                  <form
-                    ref={addForm}
-                    className="flex flex-wrap items-center gap-2 border-t border-line bg-subtle px-4 py-3"
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      const form = e.currentTarget;
-                      try {
-                        await member.mutateAsync({ email: new FormData(form).get('email'), role });
-                        form.reset();
-                      } catch {
-                        /* toast */
-                      }
-                    }}
-                  >
-                    <Input name="email" type="email" required aria-label="Registered member email" placeholder="Add a registered teammate by email" className="min-w-[200px] flex-1" />
-                    <Select<ProjectRole> aria-label="Project role" className="w-36" value={role} onChange={setRole} options={roleOptions} />
-                    <Button type="submit" variant="primary" icon={<UserPlus />} loading={member.isPending}>
-                      Add
-                    </Button>
-                  </form>
-                )}
+                {canManage && <AddMemberForm project={p} />}
               </Card>
             </div>
             {canManage && (
