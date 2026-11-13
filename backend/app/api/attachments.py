@@ -30,10 +30,16 @@ async def upload(
 def download(id: int, db: DB, actor: Actor):
     item = attachments.get_owned(db, actor, id)
     path = attachments.absolute_path(item)
+    # Type from the extension (older rows may hold an uploader-supplied type);
+    # nosniff + sandbox stop the browser running anything inside the file.
     return FileResponse(
         path,
-        media_type=item.content_type,
+        media_type=attachments.content_type_for(item.filename),
         filename=item.filename,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox",
+        },
     )
 
 

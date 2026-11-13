@@ -12,21 +12,33 @@ export type PreviewTarget =
   | { kind: 'local'; file: File }
   | { kind: 'remote'; id: number; filename: string; contentType: string };
 
-function isImage(name: string, type: string) {
-  return type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
+// The preview kind, and the type the browser sees, come from the file extension only.
+// The type a file was uploaded with is chosen by the uploader, so trusting it
+// (e.g. "x.pdf" sent as SVG, then shown in the PDF iframe) would let a file run script here.
+const IMAGE_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml', // safe only because images render through <img>, never an iframe
+};
+
+function extension(name: string) {
+  return name.split('.').pop()?.toLowerCase() ?? '';
 }
 
-function isPdf(name: string, type: string) {
-  return type === 'application/pdf' || /\.pdf$/i.test(name);
+function isImage(name: string) {
+  return extension(name) in IMAGE_TYPES;
 }
 
-function isText(name: string, type: string) {
-  return (
-    type.startsWith('text/') ||
-    type === 'application/json' ||
-    type === 'application/xml' ||
-    /\.(txt|csv|md|json|xml|ya?ml)$/i.test(name)
-  );
+function isPdf(name: string) {
+  return extension(name) === 'pdf';
+}
+
+function isText(name: string) {
+  return /\.(txt|csv|md|json|xml|ya?ml)$/i.test(name);
 }
 
 export default function FilePreview({
@@ -42,7 +54,6 @@ export default function FilePreview({
   const [loading, setLoading] = useState(false);
 
   const name = target?.kind === 'local' ? target.file.name : target?.filename ?? '';
-  const type = target?.kind === 'local' ? target.file.type : target?.contentType ?? '';
 
   useEffect(() => {
     if (!target) return;
@@ -57,22 +68,21 @@ export default function FilePreview({
       try {
         let blob: Blob;
         let filename: string;
-        let contentType: string;
         if (target.kind === 'local') {
           blob = target.file;
           filename = target.file.name;
-          contentType = target.file.type || 'application/octet-stream';
         } else {
           const res = await api.get<Blob>(`/attachments/${target.id}/download`, { responseType: 'blob' });
           blob = res.data;
           filename = target.filename;
-          contentType = target.contentType || blob.type || 'application/octet-stream';
         }
         if (cancelled) return;
-        if (isText(filename, contentType) && !isImage(filename, contentType) && !isPdf(filename, contentType)) {
+        if (isText(filename)) {
           setText(await blob.text());
-        } else if (isImage(filename, contentType) || isPdf(filename, contentType)) {
-          objectUrl = URL.createObjectURL(blob);
+        } else if (isImage(filename) || isPdf(filename)) {
+          // Re-wrap with a fixed type so the iframe can never treat the bytes as SVG/HTML.
+          const safeType = isPdf(filename) ? 'application/pdf' : IMAGE_TYPES[extension(filename)];
+          objectUrl = URL.createObjectURL(new Blob([blob], { type: safeType }));
           setUrl(objectUrl);
         } else {
           setError('Preview is not available for this file type. You can download it instead.');
@@ -92,7 +102,7 @@ export default function FilePreview({
 
   if (!target) return null;
 
-  const canPreview = isImage(name, type) || isPdf(name, type) || isText(name, type);
+  const canPreview = isImage(name) || isPdf(name) || isText(name);
 
   return (
     <Dialog
@@ -137,11 +147,11 @@ export default function FilePreview({
             <p className="text-[13px] text-ink-2">{error}</p>
           </div>
         )}
-        {!loading && !error && url && isImage(name, type) && (
+        {!loading && !error && url && isImage(name) && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={url} alt={name} className="max-h-[68vh] max-w-full rounded-md object-contain" />
         )}
-        {!loading && !error && url && isPdf(name, type) && (
+        {!loading && !error && url && isPdf(name) && (
           <iframe title={name} src={url} className="h-[68vh] w-full rounded-md border border-line bg-surface" />
         )}
         {!loading && !error && text != null && (

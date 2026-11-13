@@ -1,0 +1,74 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: Safe file preview and download for issue attachments (security fix)
+App: Zeno TeamSuite (frontend Next.js + backend FastAPI)
+================================================================================
+
+Why: an uploaded file could pretend to be a PDF (for example "report.pdf" whose
+contents are really an SVG image with a script inside). When someone opened the
+preview, that script could run inside the app and act as the viewer. This change
+makes the app decide a file's type from its extension only, and display it safely.
+
+
+--------------------------------------------------------------------------------
+1) ISSUE DOCUMENTS — Preview a file
+--------------------------------------------------------------------------------
+Page name : Issue detail, and the Create / Edit issue dialog (Documents field)
+Routes    : /issues/[issueId], and the issue dialog opened from Backlog, Board,
+            Work items, etc.
+Files:
+  - frontend/src/components/issues/file-preview.tsx
+
+What changed:
+  - The preview type is decided from the file extension only (.png, .jpg, .jpeg, .gif,
+    .webp, .bmp, .svg = image; .pdf = PDF; .txt, .csv, .md, .json, .xml, .yaml, .yml = text).
+  - PDFs are always shown as PDFs and images always as images, whatever type
+    the uploader's browser sent.
+  - Other files (Word, Excel, PowerPoint, zip…) still show "Preview is not
+    available…" with a Download button. No visible change for normal files.
+
+
+--------------------------------------------------------------------------------
+2) ISSUE DOCUMENTS — Upload and download
+--------------------------------------------------------------------------------
+Page name : Issue detail / Create-Edit issue dialog (Documents)
+API       : POST /api/issues/{id}/attachments, GET /api/attachments/{id}/download
+Files:
+  - backend/app/services/attachments.py
+  - backend/app/api/attachments.py
+  - backend/tests/test_attachments.py
+
+What changed:
+  - The server records each file's type from its extension, not from what the
+    browser claimed.
+  - Downloads are always sent as a file to save, with headers that stop the
+    browser running anything inside the file.
+  - Files uploaded before this change are also served safely, because the type
+    is worked out again from the extension on each download.
+
+
+--------------------------------------------------------------------------------
+TEST IDEAS FOR BA / QA
+--------------------------------------------------------------------------------
+Positive:
+  - Upload a real PDF to an issue. Click it. The PDF shows in the preview.
+  - Upload PNG / JPG / GIF / SVG images. Each previews as an image.
+  - Upload .txt / .csv / .json. Each previews as text.
+  - Upload .docx / .xlsx. You see "Preview not available"; Download saves the
+    file with its original name, and it opens correctly.
+  - Before saving a new issue, click a selected (not yet uploaded) file. The
+    preview works the same way.
+Negative / security:
+  - Rename an SVG that contains <script> to "test.pdf" and upload it. The preview
+    must NOT run a script (no popup, no page change). It shows a broken or blank
+    PDF instead.
+  - Upload a disallowed file (e.g. .exe). The upload is rejected with
+    "Unsupported file type…".
+  - Download any attachment. The browser saves it rather than opening it as a
+    web page.
+
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------
