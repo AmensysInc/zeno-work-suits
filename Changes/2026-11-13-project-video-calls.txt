@@ -1,0 +1,107 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: Video calls in project chats (self-hosted LiveKit)
+App: Zeno TeamSuite (frontend Next.js + backend FastAPI + LiveKit server)
+================================================================================
+
+Each project's group chat can now start a video call for the project team, in
+the style of Microsoft Teams. Calls run on our own server (LiveKit, open source),
+not a third-party service.
+
+
+--------------------------------------------------------------------------------
+1) CHATS — Start or join a project call
+--------------------------------------------------------------------------------
+Page name : Chats
+Route     : /chat?project=<projectId>
+Files:
+  - frontend/src/app/(app)/chat/page.tsx
+  - frontend/src/components/chat/call-room.tsx      (NEW)
+
+What changed:
+  - The chat header has a "Call" button, next to Members.
+  - While a call is running:
+      • the button turns green and says "Join call".
+      • a green bar under the header says "Call in progress · <names of people in
+        the call>", with a Join button.
+  - Pressing Call / Join opens a full-screen call window:
+      1. Device check: camera preview, microphone and camera on/off, and device
+         choice. The camera starts OFF and the microphone ON. Choices are
+         remembered for next time.
+      2. "Join call" enters the call: video grid, mute / camera / screen share,
+         an in-call chat, settings and Leave.
+  - Leave (or losing the connection) closes the window and returns to the chat.
+  - The first person to join posts a line in the chat:
+    "<Name> started a video call · <time>".
+  - The chat and the call bar now refresh every 10 seconds. Before, new messages
+    showed only after reopening the page.
+  - Note: messages typed in the in-call chat are NOT saved. They disappear when
+    the call ends. The project chat itself is saved as before.
+
+
+--------------------------------------------------------------------------------
+2) WHO CAN JOIN — Server rules
+--------------------------------------------------------------------------------
+API   : GET  /api/projects/{id}/call        (is a call running, and who is in it)
+        POST /api/projects/{id}/call/join   (one-time pass to enter the call)
+Files:
+  - backend/app/api/calls.py           (NEW)
+  - backend/app/services/calls.py      (NEW)
+  - backend/app/core/config.py, backend/app/main.py
+  - backend/tests/test_calls.py        (NEW)
+
+What changed:
+  - There is one call room per project. Only people who can open the project
+    (its team, its owner, admins) can see or join the call. Anyone else gets
+    "Project not found".
+  - Up to 50 people per call. An empty call closes after 5 minutes.
+  - If the call server is down, the chat still works, and calls show
+    "The call server is not reachable".
+  - If calls are not configured on a server, the Call button is hidden.
+
+
+--------------------------------------------------------------------------------
+3) DEPLOYMENT
+--------------------------------------------------------------------------------
+Files:
+  - docker-compose.prod.yml          (new "livekit" service, pinned v1.13.11)
+  - .env.production.example          (LIVEKIT_* settings)
+  - deploy/nginx-zenoteamsuite.conf  (new /rtc location for call signalling)
+
+Server needs: LIVEKIT_API_KEY and LIVEKIT_API_SECRET in .env, the /rtc block
+in the live nginx site, and ports 7881/tcp and 7882/udp open in the firewall.
+
+
+--------------------------------------------------------------------------------
+TEST IDEAS FOR BA / QA
+--------------------------------------------------------------------------------
+Use two people (or two browsers/devices) on the same project.
+Positive:
+  - Person A opens Chats → project → Call. The device check opens, with the
+    camera off and the microphone on. A presses Join call and enters the call.
+      → The chat shows "A started a video call".
+      → Within about 10 seconds, person B sees the green "Call in progress · A"
+        bar and a green "Join call" button.
+  - B joins. They can see and hear each other. Try camera on/off, mute/unmute
+    and screen share.
+  - A third person joins. All three tiles show.
+  - Everyone presses Leave. Within about 10 seconds the green bar disappears.
+  - Start a call in project X, then open project Y's chat. Y shows no call bar.
+  - Allow the camera/microphone permission on first use. On later calls the
+    device choices are remembered.
+  - Phones (Chrome on Android, Safari on iPhone): join and talk.
+Negative:
+  - Block camera/microphone in the browser. A clear message appears. You can
+    still join and listen.
+  - A user who is NOT on the project cannot see that project's chat or call.
+  - Joining from a network that blocks UDP (some office Wi-Fi) should still
+    connect (over TCP). Note whether quality is acceptable.
+Regression:
+  - Sending, editing and deleting normal chat messages works as before.
+  - New messages from others now appear without a reload (within 10 seconds).
+
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------

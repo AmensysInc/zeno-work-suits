@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     # Issue document uploads (images, PDFs, Office files, etc.).
     upload_dir: str = "uploads"
     max_upload_bytes: int = 25 * 1024 * 1024
+    # Project video calls (self-hosted LiveKit). Calls are off until the key and
+    # secret are set. livekit_url is what browsers connect to (wss://…);
+    # livekit_api_url is how the backend reaches the server to see who is in a call.
+    livekit_url: str = "wss://zenoteamsuite.com"
+    livekit_api_url: str = "http://127.0.0.1:7880"
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
