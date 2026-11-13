@@ -1,0 +1,77 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: Signed-in user can assign work to themselves
+App: Zeno TeamSuite (frontend Next.js + backend FastAPI)
+================================================================================
+
+Problem reported: when creating or editing a story or task, the Assignees list
+showed other people but not the signed-in user.
+
+Cause: the list only showed the project's team members. An admin can open every
+project without being on its team, and an owning manager may have been removed
+from the team. Neither saw their own name, and the server rejected them as
+"Assignee must be a project member".
+
+
+--------------------------------------------------------------------------------
+1) CREATE / EDIT ISSUE — Assignees picker
+--------------------------------------------------------------------------------
+Page name : Create issue / Edit issue dialog (Story, Task, Bug, Subtask, Epic)
+Routes    : opened from Backlog, Board, Work items, Bugs, Issue detail
+            (/projects/[projectId]/..., /issues/[issueId])
+Files:
+  - frontend/src/components/issues/create-issue-dialog.tsx
+  - frontend/src/components/issues/assignee-picker.tsx
+
+What changed:
+  - Your own name is always listed first, marked "(you)".
+  - An admin, or the project's owning manager, sees their own name even when
+    they are not on the project team.
+  - Other people are listed as before (project team members only).
+
+
+--------------------------------------------------------------------------------
+2) ASSIGNING — Server rules
+--------------------------------------------------------------------------------
+API   : POST /api/issues, PUT /api/issues/{id}
+Files:
+  - backend/app/services/issues.py
+  - backend/tests/test_assign_self.py   (NEW)
+
+What changed:
+  - An admin may assign an issue to themselves in any project.
+  - When an admin (or an owner who is no longer on the team) is assigned, they
+    are added to the project team as a Developer. From then on they appear in
+    the board avatars, the Assignee filter, bulk actions and Project Settings →
+    Members.
+  - Anyone else must still be a project team member to be assigned.
+
+
+--------------------------------------------------------------------------------
+TEST IDEAS FOR BA / QA
+--------------------------------------------------------------------------------
+Positive:
+  - As a team member, open Create issue. Your name appears first with "(you)".
+    Select it and save. The issue shows you as the assignee.
+  - As an ADMIN who is NOT on a project's team: open Create issue for that
+    project. Your name appears with "(you)". Assign yourself and save. It
+    succeeds.
+      → Project Settings → Members now lists you as a Developer.
+      → The Board's Assignee filter now includes you.
+  - Edit an existing story or task and add yourself alongside another assignee.
+    Both are saved; the first one is the primary assignee.
+  - Remove yourself (untick) and save. You are no longer assigned.
+Negative:
+  - As a normal EMPLOYEE, you only see the projects you are on, and the list
+    shows team members only (no outsiders).
+  - Assigning a person who is not on the team (e.g. through the API) is
+    rejected with "Assignee must be a project member".
+Regression:
+  - The "Assigned to me" / "mine" lists include issues you assigned to
+    yourself.
+
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------
