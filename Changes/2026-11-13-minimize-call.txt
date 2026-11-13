@@ -1,0 +1,75 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: Video calls — minimize the call and keep using the app (like Teams)
+================================================================================
+
+Request: while in a call, be able to minimize it and move around Zeno
+TeamSuite, so the screen share can show the app (Backlog, Board, Test cases…)
+instead of a full-screen call window.
+
+--------------------------------------------------------------------------------
+1) CALL WINDOW — Minimize / Expand
+--------------------------------------------------------------------------------
+Page name : Call window (opened from Chats → Call / Join call)
+Route     : any page in the app once the call is minimized
+Files:
+  - frontend/src/components/chat/call-context.tsx   (NEW)
+  - frontend/src/components/chat/call-room.tsx
+  - frontend/src/components/chat/call-room.css
+  - frontend/src/app/(app)/layout.tsx
+  - frontend/src/app/(app)/chat/page.tsx
+
+What changed:
+  - After joining, the call header has a "Minimize" button (top right).
+  - Minimized, the call becomes a small floating window in the bottom-right
+    corner. It shows:
+      • one video tile: someone's shared screen first, otherwise another
+        person, otherwise you
+      • "N in call", and a blue "Sharing" tag while you share your screen
+      • buttons: microphone, camera, share screen, leave, and expand (↗)
+  - The call STAYS CONNECTED while you open any other page (Backlog, Board,
+    Issues, AI generator…). Only Leave, signing out, or a full page reload
+    ends it.
+  - The expand button (↗) brings back the full call screen.
+  - In Chats, while you are in that project's call, the buttons say
+    "Return to call".
+  - You can be in one call at a time. Starting a call in another project shows
+    "You are already in the <project> call. Leave it before joining another."
+  - Fix: the name box on the "check your camera and microphone" screen is now
+    hidden. Your name always comes from your account.
+
+--------------------------------------------------------------------------------
+TEST IDEAS FOR BA / QA
+--------------------------------------------------------------------------------
+Positive:
+  - Join a call and press Minimize. A small window appears bottom-right, and
+    the app is fully usable.
+  - While minimized, open Backlog, then Board, then an issue. The window stays,
+    and the other person can still hear you.
+  - Minimize, press Share screen, pick the ENTIRE screen, and move around the
+    app. The other person sees the TeamSuite pages you open. Your window shows
+    "Sharing".
+  - Press ↗ (expand). The full call screen returns, still connected.
+  - Press Leave in the small window. It closes; Chats no longer shows "Call in
+    progress" (within 10 s).
+  - In Chats, while in the call: the header button and the green bar say
+    "Return to call".
+Negative:
+  - While in project A's call, open project B's chat and press Call. You see
+    "You are already in the A call…" and A's call comes back.
+  - Reload the page (F5) during a call. The call ends (expected); join again
+    from Chats.
+Regression:
+  - The pre-join screen shows the camera preview, Microphone, Camera and Join
+    call, with no name box.
+  - The full call screen still has share screen, chat, settings and leave.
+  - Cancelling screen share shows no error (see 2026-11-13-screen-share-cancel.txt).
+
+Checked on 2026-11-13 in Chrome against a local LiveKit server. Join →
+Minimize → Backlog → Board → Expand → Leave works, and the server showed the
+person still connected throughout, then 0 people after Leave.
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------

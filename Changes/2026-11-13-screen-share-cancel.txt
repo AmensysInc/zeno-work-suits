@@ -1,0 +1,58 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: Video calls — screen sharing fixes (cancel error, "mirror" effect)
+================================================================================
+
+Problem reported: in a call, pressing "Share screen" and then Cancel in the
+browser's picker showed "Could not use your camera or microphone. Check the
+browser permission." Nothing was wrong: cancelling is a normal choice.
+
+Problem 2 reported: when sharing, the screen showed many copies of itself inside
+each other (a "hall of mirrors"). Your own shared screen was shown back to you
+inside the call, and that call was itself on the screen being shared.
+
+--------------------------------------------------------------------------------
+1) CHATS — Call window
+--------------------------------------------------------------------------------
+Page name : Chats → Call (full-screen call window)
+Route     : /chat?project=<projectId>
+Files:
+  - frontend/src/components/chat/call-room.tsx
+  - frontend/src/components/chat/call-room.css      (NEW)
+
+What changed:
+  - Like Teams, you no longer see your own shared screen in the call. Your
+    screen-share tile shows "You are sharing your screen. Others can see it."
+    No more repeated copies. Everyone else still sees your screen normally.
+  - Cancelling the screen-share picker shows no message.
+  - If screen sharing really fails, the message is "Screen sharing could not
+    start. Try again."
+  - Camera and microphone problems now say which device and what to do:
+      • blocked   → "Your camera is blocked. Allow it in the browser's site
+                     settings (the icon next to the address bar)."
+      • missing   → "No microphone was found on this device."
+      • in use    → "Your camera is being used by another app. Close it and
+                     try again."
+
+--------------------------------------------------------------------------------
+TEST IDEAS FOR BA / QA
+--------------------------------------------------------------------------------
+  - Two people in a call. Person A shares the ENTIRE screen.
+      → A sees "You are sharing your screen. Others can see it." (no repeated copies).
+      → B sees A's screen clearly, with no repeated copies.
+  - A shares just one window or one browser tab. B sees it; A sees the message.
+  - A stops sharing. The tile disappears and the camera grid returns.
+  - In a call, press Share screen, then Cancel. No error appears and the call
+    continues.
+  - Press Share screen and pick a window. It shares. Stop sharing. No error.
+  - Block the camera in the site settings (the icon next to the address bar),
+    then turn the camera on. The "camera is blocked" message appears.
+  - On a PC with no microphone, join. The "No microphone was found" message
+    appears.
+  - With the camera open in another app (e.g. Teams or Zoom on Windows), turn
+    the camera on in our call. The "being used by another app" message appears.
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------
