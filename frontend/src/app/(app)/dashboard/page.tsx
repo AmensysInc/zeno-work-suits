@@ -10,6 +10,7 @@ import { Card, CardHeader, Progress, State, projectColor } from '@/components/ui
 import { IssueKey, PriorityIcon, StatusIcon, TypeIcon, statusMeta } from '@/components/ui/glyphs';
 import { BarList, Donut, Legend, TrendChart } from '@/components/charts';
 import IssueList from '@/components/issues/issue-list';
+import UpcomingMeetings from '@/components/calendar/upcoming-meetings';
 
 const WEEKS = 8;
 const DAY = 864e5;
@@ -97,6 +98,9 @@ export default function DashboardPage() {
             Good {hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}, {me.data?.first_name ?? 'there'}
           </h1>
           <p className="text-[13px] text-ink-2">Here’s what’s happening across your {projects.data?.length ?? ''} projects.</p>
+        </div>
+        <div className="mb-3.5">
+          <UpcomingMeetings />
         </div>
         <State loading={query.isLoading} error={query.error} />
         {query.data && (
