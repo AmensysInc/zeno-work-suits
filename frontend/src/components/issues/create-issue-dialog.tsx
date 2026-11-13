@@ -5,7 +5,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { useData, useProjects, useSave } from '@/hooks/data';
+import { useData, useMe, useProjects, useSave } from '@/hooks/data';
 import { api, errorMessage } from '@/lib/api';
 import { uploadIssueAttachments } from '@/lib/attachments';
 import { issueTypes, label, priorities, type Issue, type IssueAttachment, type Project, type Sprint } from '@/types';
@@ -73,6 +73,17 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
   const project = useData<Project>(`/projects/${pid}`, !!pid);
   const issues = useData<Issue[]>(`/issues?project_id=${pid}`, !!pid);
   const sprints = useData<Sprint[]>(`/projects/${pid}/sprints`, !!pid);
+  const me = useMe();
+  // Admins see every project without being on its team, and an owner may have left it;
+  // both can still take work (the server adds them to the team when they do).
+  const members = project.data?.members ?? [];
+  const assignable =
+    me.data &&
+    project.data &&
+    (me.data.role === 'ADMIN' || me.data.id === project.data.owner_id) &&
+    !members.some((u) => u.id === me.data!.id)
+      ? [me.data, ...members]
+      : members;
   const existing = useData<IssueAttachment[]>(`/issues/${initial.id}/attachments`, !!initial.id);
   const save = useSave(initial.id ? `/issues/${initial.id}` : '/issues', initial.id ? 'put' : 'post', initial.id ? 'Issue updated' : 'Issue created');
 
@@ -265,7 +276,8 @@ export default function CreateIssueDialog({ initial, onClose }: { initial: Parti
                 name="assignee_ids"
                 render={({ field }) => (
                   <AssigneePicker
-                    members={project.data?.members ?? []}
+                    members={assignable}
+                    meId={me.data?.id}
                     value={field.value}
                     onChange={field.onChange}
                   />

@@ -1,13 +1,22 @@
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, update, insert
 from app.models import Issue, Project, Sprint, TestCase, TestExecution, User
 from app.services import automations
-from app.services.access import project_access, issue_access, require_lead
+from app.models.project import project_members
+from app.services.access import project_access, issue_access, require_lead, is_admin
 from app.services.activity import record
 
 
-def _member_ids(project):
-    return {u.id for u in project.members} | {project.owner_id}
+def _member_ids(project, actor=None):
+    """People an issue can be assigned to: members, the owner, and the acting admin.
+
+    Admins see every project without being members, so they may assign themselves;
+    set_assignees then adds them to the team.
+    """
+    ids = {u.id for u in project.members} | {project.owner_id}
+    if actor is not None and is_admin(actor):
+        ids.add(actor.id)
+    return ids
 
 
 def resolve_assignee_ids(values):
@@ -33,8 +42,8 @@ def resolve_assignee_ids(values):
     return None
 
 
-def set_assignees(db, issue, project, assignee_ids):
-    members = _member_ids(project)
+def set_assignees(db, issue, project, assignee_ids, actor=None):
+    members = _member_ids(project, actor)
     for uid in assignee_ids:
         if uid not in members:
             raise HTTPException(422, "Assignee must be a project member")
@@ -46,9 +55,17 @@ def set_assignees(db, issue, project, assignee_ids):
         people.append(user)
     issue.assignees = people
     issue.assignee_id = assignee_ids[0] if assignee_ids else None
+    # An admin (or an owner no longer on the team) who takes work joins the team,
+    # so they show up in filters, the board and later assignee lists.
+    team = {u.id for u in project.members}
+    for uid in assignee_ids:
+        if uid not in team:
+            db.execute(insert(project_members).values(project_id=project.id, user_id=uid))
+            db.expire(project, ["members", "team"])
+            team.add(uid)
 
 
-def validate_links(db, project, values, current=None):
+def validate_links(db, project, values, current=None, actor=None):
     issue_type = values.get("issue_type", current.issue_type if current else None)
     for field in ("epic_id", "parent_issue_id", "related_issue_id"):
         target = values.get(field, getattr(current, field, None))
@@ -87,7 +104,7 @@ def validate_links(db, project, values, current=None):
     check_ids = ids if ids is not None else (
         [values["assignee_id"]] if values.get("assignee_id") else []
     )
-    members = _member_ids(project)
+    members = _member_ids(project, actor)
     for uid in check_ids:
         if uid not in members:
             raise HTTPException(422, "Assignee must be a project member")
@@ -136,7 +153,7 @@ def add(db, project, values, actor):
     payload["assignee_id"] = assignee_ids[0] if assignee_ids else None
     # Mutate the same dict validate_links may update (e.g. BACKLOG → TODO in an active sprint).
     payload["assignee_ids"] = assignee_ids
-    validate_links(db, project, payload)
+    validate_links(db, project, payload, actor=actor)
     payload.pop("assignee_ids", None)
     counter = db.scalar(
         update(Project)
@@ -147,7 +164,7 @@ def add(db, project, values, actor):
     issue = Issue(**payload, issue_key=f"{project.key}-{counter}", reporter_id=actor.id)
     db.add(issue)
     db.flush()
-    set_assignees(db, issue, project, assignee_ids)
+    set_assignees(db, issue, project, assignee_ids, actor)
     record(db, actor, project.id, issue.id, "created issue")
     return issue
 
@@ -250,7 +267,7 @@ def apply(db, project, issue, values, actor):
     values.pop("assignee_ids", None)
     if assignee_ids is not None:
         values["assignee_id"] = assignee_ids[0] if assignee_ids else None
-    validate_links(db, project, values, issue)
+    validate_links(db, project, values, issue, actor)
     # Work taken out of a sprint goes back to the backlog unless it has started.
     if (
         "sprint_id" in values
@@ -269,7 +286,7 @@ def apply(db, project, issue, values, actor):
     if assignee_ids is not None:
         before = [u.id for u in issue.assignees]
         if before != assignee_ids:
-            set_assignees(db, issue, project, assignee_ids)
+            set_assignees(db, issue, project, assignee_ids, actor)
             record(
                 db,
                 actor,

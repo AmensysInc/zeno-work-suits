@@ -11,17 +11,24 @@ const fullName = (u: User) => `${u.first_name} ${u.last_name}`.trim();
 
 /** Multi-select people picker with checkboxes (create/edit issue assignee). */
 export default function AssigneePicker({
-  members,
+  members: people_,
   value,
   onChange,
+  meId,
   'aria-label': ariaLabel = 'Assignees',
 }: {
   members: User[];
   value: number[];
+  /** The signed-in user: listed first and marked "(you)". */
+  meId?: number;
   onChange: (ids: number[]) => void;
   'aria-label'?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const members = useMemo(
+    () => [...people_].sort((a, b) => Number(b.id === meId) - Number(a.id === meId)),
+    [people_, meId],
+  );
   const selected = useMemo(() => new Set(value), [value]);
   const people = useMemo(() => members.filter((u) => selected.has(u.id)), [members, selected]);
   const toggle = (id: number) => {
@@ -80,7 +87,10 @@ export default function AssigneePicker({
             <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-hover">
               <Checkbox checked={on} onChange={() => toggle(u.id)} aria-label={fullName(u)} />
               <Avatar user={u} size={18} />
-              <span className="min-w-0 flex-1 truncate">{fullName(u)}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {fullName(u)}
+                {u.id === meId && <span className="text-ink-3"> (you)</span>}
+              </span>
             </label>
           );
         })}
