@@ -135,7 +135,10 @@ function AddMemberForm({ project }: { project: Project }) {
   const [picked, setPicked] = useState<User | null>(null);
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<ProjectRole>('DEVELOPER');
-  const box = useRef<HTMLDivElement>(null);
+  // The whole form counts as "inside": the results list sits below the search
+  // box, so watching only the box closed the list on mousedown, before a
+  // result's click could pick the person.
+  const box = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -168,6 +171,7 @@ function AddMemberForm({ project }: { project: Project }) {
 
   return (
     <form
+      ref={box}
       className="flex flex-col gap-2 border-t border-line bg-subtle px-4 py-3"
       onSubmit={async (e) => {
         e.preventDefault();
@@ -181,7 +185,7 @@ function AddMemberForm({ project }: { project: Project }) {
       }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div ref={box} className="min-w-[220px] flex-1">
+        <div className="min-w-[220px] flex-1">
           {picked ? (
             <div className="flex h-8 items-center gap-2 rounded-md border border-line-2 bg-surface px-2">
               <Avatar user={picked} size={20} />

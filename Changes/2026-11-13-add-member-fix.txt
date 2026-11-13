@@ -1,0 +1,49 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: Project Settings — adding a member from the search results now works
+================================================================================
+
+Problem reported: in Project Settings → Members, typing a name in "Search by
+name or email…" listed the person, but clicking them did nothing. They were
+not picked, and Add stayed greyed out, so nobody could be added.
+
+Cause: the list closes when you click outside it. Only the search box counted
+as "inside", but the results list sits below the box. Pressing on a result
+closed the list before the click could pick the person.
+
+--------------------------------------------------------------------------------
+1) PROJECT SETTINGS — Add members
+--------------------------------------------------------------------------------
+Page name : Project Settings (Members card)
+Route     : /projects/[projectId]/settings
+Files:
+  - frontend/src/app/(app)/projects/[projectId]/settings/page.tsx
+
+What changed:
+  - The whole add-member area (search box, results, role, Add) counts as
+    "inside", so clicking a result picks the person. Clicking elsewhere on the
+    page still closes the list.
+
+--------------------------------------------------------------------------------
+TEST IDEAS FOR BA / QA
+--------------------------------------------------------------------------------
+(As an admin, or the manager who owns the project.)
+  - Type part of a name, e.g. "mia". The person is listed. Click them: their
+    name shows in the box with an ×, and Add turns active.
+  - Pick a role (e.g. Tester) and press Add. "Member added" appears, they show
+    in the Members list with that role, and "Members · N" goes up by one.
+  - Search by email. It works the same way.
+  - Click the × to clear the pick. The search box comes back.
+  - Type a name, then click somewhere else on the page. The results list closes.
+  - People already on the project don't appear in the search.
+  - When everyone is already a member, the list says "Everyone is already on
+    this project."
+
+Checked on 2026-11-13 in Chrome on a local copy. On the old code, clicking
+"Mia Wong" did nothing and Add stayed disabled (bug reproduced). With the fix,
+Mia was picked, Add worked, and Members went from 1 to 2. No console errors.
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------
