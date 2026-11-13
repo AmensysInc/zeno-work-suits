@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { MessageSquare, PhoneCall, Search, Send, Users, Video } from 'lucide-react';
 import { useCurrentProject } from '@/components/layout/context';
+import { useCall } from '@/components/chat/call-context';
 import { PageBar } from '@/components/layout/page';
 import { Avatar, AvatarStack, Empty, ProjectMark, State } from '@/components/ui/display';
 import { Button } from '@/components/ui/button';
@@ -16,9 +16,6 @@ import { useMe, useProjects } from '@/hooks/data';
 import { api, errorMessage } from '@/lib/api';
 import { label, type ChatMessage, type Project } from '@/types';
 import { cn } from '@/lib/utils';
-
-// The video call UI (LiveKit) is large and browser-only, so it loads when a call opens.
-const CallRoom = dynamic(() => import('@/components/chat/call-room'), { ssr: false });
 
 /** Polling keeps the chat and the "call in progress" banner current without a reload. */
 const REFRESH_MS = 10_000;
@@ -74,7 +71,7 @@ export default function ChatPage() {
   const endRef = useRef<HTMLDivElement>(null);
   const projectId = Number(params.get('project')) || currentProject || projects.data?.[0]?.id;
   const project = projects.data?.find((p) => p.id === projectId);
-  const [inCall, setInCall] = useState(false);
+  const calls = useCall();
   const messages = useQuery<ChatMessage[]>({
     queryKey: [`/projects/${projectId}/chat`],
     queryFn: async () => (await api.get<ChatMessage[]>(`/projects/${projectId}/chat`)).data,
@@ -90,10 +87,9 @@ export default function ChatPage() {
   });
   const callActive = !!call.data?.active;
   const callPeople = call.data?.participants ?? [];
-  const refreshCall = () => {
-    qc.invalidateQueries({ queryKey: [`/projects/${projectId}/call`] });
-    qc.invalidateQueries({ queryKey: [`/projects/${projectId}/chat`] });
-  };
+  // Already in (or minimized from) this project's call: the buttons bring it back.
+  const inThisCall = calls.call?.projectId === projectId;
+  const openCall = () => project && calls.open({ projectId: project.id, title: project.name });
   const send = useMutation({
     mutationFn: async () => (await api.post<ChatMessage>(`/projects/${projectId}/chat`, { body: body.trim() })).data,
     onSuccess: () => {
@@ -143,8 +139,8 @@ export default function ChatPage() {
               </span>
             )}
             {call.data?.enabled && (
-              <Button size="sm" variant={callActive ? 'success' : 'secondary'} icon={<Video />} onClick={() => setInCall(true)}>
-                {callActive ? 'Join call' : 'Call'}
+              <Button size="sm" variant={callActive || inThisCall ? 'success' : 'secondary'} icon={<Video />} onClick={openCall}>
+                {inThisCall ? 'Return to call' : callActive ? 'Join call' : 'Call'}
               </Button>
             )}
             <Button size="sm" icon={<Users />} aria-expanded={membersOpen} onClick={() => setMembersOpen((o) => !o)}>
@@ -157,8 +153,8 @@ export default function ChatPage() {
               <span className="min-w-0 flex-1 truncate">
                 <b className="font-semibold">Call in progress</b> · {callPeople.map((p) => p.name).join(', ')}
               </span>
-              <Button size="sm" variant="success" onClick={() => setInCall(true)}>
-                Join
+              <Button size="sm" variant="success" onClick={openCall}>
+                {inThisCall ? 'Return to call' : 'Join'}
               </Button>
             </div>
           )}
@@ -232,19 +228,6 @@ export default function ChatPage() {
           </form>
         </section>
       </div>
-      {inCall && project && (
-        <CallRoom
-          key={project.id}
-          projectId={project.id}
-          title={project.name}
-          userName={me.data ? fullName(me.data) : ''}
-          onJoined={refreshCall}
-          onClose={() => {
-            setInCall(false);
-            refreshCall();
-          }}
-        />
-      )}
     </>
   );
 }

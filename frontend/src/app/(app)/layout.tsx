@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/layout/app-shell';
+import { CallProvider } from '@/components/chat/call-context';
 import { getToken } from '@/lib/api';
 
 /** Signed-in area: no token sends you to sign in. */
@@ -16,7 +17,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   if (!ready) return null;
   return (
     <Suspense fallback={null}>
-      <AppShell>{children}</AppShell>
+      {/* Above the shell, so a minimized call stays connected across pages. */}
+      <CallProvider>
+        <AppShell>{children}</AppShell>
+      </CallProvider>
     </Suspense>
   );
 }
