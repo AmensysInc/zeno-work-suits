@@ -1,6 +1,7 @@
 'use client';
 
 import '@livekit/components-styles';
+import './call-room.css';
 import { useState } from 'react';
 import { LiveKitRoom, PreJoin, VideoConference, type LocalUserChoices } from '@livekit/components-react';
 import { MediaDeviceFailure } from 'livekit-client';
@@ -71,7 +72,7 @@ export default function CallRoom({
       aria-modal="true"
       aria-label={`${title} call`}
       data-lk-theme="default"
-      className="fixed inset-0 z-50 flex flex-col bg-[#111] text-white"
+      className="zeno-call fixed inset-0 z-50 flex flex-col bg-[#111] text-white"
     >
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-white/10 px-4">
         <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{title} · Call</span>
