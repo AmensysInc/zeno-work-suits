@@ -5,9 +5,11 @@ from app.schemas.issue import Priority
 
 OutputType = Literal["USER_STORIES", "TEST_CASES", "BOTH"]
 CoverageType = Literal["POSITIVE", "NEGATIVE", "BOUNDARY", "VALIDATION"]
-# Where the code came from: a folder of the default branch, or the changes of a
-# branch, pull request or single commit.
-SourceKind = Literal["DEFAULT", "BRANCH", "PULL", "COMMIT"]
+# Where the code came from: a folder of the default branch, the changes of a
+# branch, pull request or single commit, or a change note in the Changes/ folder.
+SourceKind = Literal["DEFAULT", "BRANCH", "PULL", "COMMIT", "NOTE"]
+# A change note: a .txt/.md file directly inside the repository's Changes/ folder.
+CHANGE_NOTE = r"^[Cc]hanges/[\w .()+,&'-]+\.(txt|md)$"
 
 
 class GeneratorStatusOut(BaseModel):
@@ -18,6 +20,19 @@ class GeneratorStatusOut(BaseModel):
 class ModuleOut(BaseModel):
     path: str
     file_count: int
+
+
+class ChangeNoteOut(BaseModel):
+    path: str
+    # From the file name "YYYY-MM-DD-topic.txt"; empty when the name has no date.
+    date: str
+    title: str
+
+
+class ChangeNoteContentOut(ChangeNoteOut):
+    content: str
+    # Source files the note names that exist in the repository; read with the note.
+    files: list[str]
 
 
 class PullModuleOut(BaseModel):
@@ -36,6 +51,8 @@ class GenerateIn(BaseModel):
     branch: str = Field(default="", max_length=200, pattern=r"^$|" + BRANCH)
     pull_number: int | None = Field(default=None, ge=1)
     commit: str = Field(default="", pattern=r"^$|^[0-9a-fA-F]{7,40}$")
+    # A change note to draft from (e.g. "Changes/2026-11-13-video-calls.txt").
+    change_note: str = Field(default="", max_length=300, pattern=r"^$|" + CHANGE_NOTE)
     output_type: OutputType = "BOTH"
     coverage: list[CoverageType] = Field(default_factory=lambda: ["POSITIVE"])
 
@@ -46,8 +63,11 @@ class GenerateIn(BaseModel):
 
     @model_validator(mode="after")
     def _one_source(self):
-        if sum(map(bool, (self.branch, self.pull_number, self.commit))) > 1:
-            raise ValueError("Choose a branch, a pull request or a commit, not several")
+        chosen = (self.branch, self.pull_number, self.commit, self.change_note)
+        if sum(map(bool, chosen)) > 1:
+            raise ValueError(
+                "Choose a branch, a pull request, a commit or a change note, not several"
+            )
         return self
 
 

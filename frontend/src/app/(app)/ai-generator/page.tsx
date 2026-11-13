@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2, Save, Sparkles, X } from 'lucide-react';
+import { CheckCircle2, FileText, Save, Sparkles, X } from 'lucide-react';
 import { useCurrentProject } from '@/components/layout/context';
 import { PageBar, PageBody } from '@/components/layout/page';
 import RepoActivity from '@/components/github/repo-activity';
@@ -20,6 +20,8 @@ import {
   generatorCoverage,
   generatorOutputs,
   label,
+  type ChangeNote,
+  type ChangeNoteContent,
   type GeneratedDraft,
   type GeneratorCoverage,
   type GeneratorModule,
@@ -31,11 +33,14 @@ import {
 } from '@/types';
 import { cn } from '@/lib/utils';
 
-/** What to read instead of a default-branch module: only the code it changed. */
+/** What to read instead of a default-branch module: only the code it changed, or a change note. */
 type Source =
   | { kind: 'pull'; pull: GitHubPull }
   | { kind: 'branch'; name: string }
-  | { kind: 'commit'; commit: GitHubCommit };
+  | { kind: 'commit'; commit: GitHubCommit }
+  | { kind: 'note'; path: string };
+
+const noteLabel = (n: ChangeNote) => (n.date ? `${n.date} · ${n.title}` : n.title);
 
 type Saved = {
   issue_ids: number[];
@@ -61,6 +66,7 @@ function sourceText(draft: GeneratedDraft) {
     BRANCH: `changes on ${draft.source_ref}`,
     PULL: `changes in PR #${draft.source_ref}`,
     COMMIT: 'changes in one commit',
+    NOTE: `change note ${draft.source_ref.split('/').pop()}`,
   }[draft.source_kind ?? 'DEFAULT'];
   return `Source: ${draft.repository} · ${from}${draft.source_kind !== 'DEFAULT' && draft.module_path ? ` in ${draft.module_path}` : ''}${draft.source_commit ? ` @ ${draft.source_commit.slice(0, 7)}` : ''}`;
 }
@@ -90,6 +96,7 @@ export default function AiGeneratorPage() {
   const pull = picked?.kind === 'pull' ? picked.pull : null;
   const branch = picked?.kind === 'branch' ? picked.name : '';
   const commit = picked?.kind === 'commit' ? picked.commit : null;
+  const note = picked?.kind === 'note' ? picked.path : '';
   const [outputType, setOutputType] = useState<GeneratorOutput>('BOTH');
   const [coverage, setCoverage] = useState<GeneratorCoverage[]>(['POSITIVE']);
   const [draft, setDraft] = useState<GeneratedDraft | null>(null);
@@ -120,6 +127,16 @@ export default function AiGeneratorPage() {
   const modules = useData<GeneratorModule[]>(
     `/ai-generator/projects/${projectId}/modules?${repoParam}`,
     hasRepo,
+  );
+  // Change notes are read on the server with its GitHub token, so people without
+  // access to the repository can still pick, read and draft from them.
+  const notes = useData<ChangeNote[]>(
+    `/ai-generator/projects/${projectId}/change-notes?${repoParam}`,
+    hasRepo && !!status.data?.github_configured,
+  );
+  const noteContent = useData<ChangeNoteContent>(
+    `/ai-generator/projects/${projectId}/change-notes/content?path=${encodeURIComponent(note)}&${repoParam}`,
+    hasRepo && !!note,
   );
   const pulls = useData<GitHubPull[]>(
     `/github/projects/${projectId}/pulls?state=all&${repoParam}`,
@@ -152,7 +169,9 @@ export default function AiGeneratorPage() {
         : { kind: 'commit', commit: selected },
     );
   // One dropdown carries modules, pull requests, branches and a picked commit; the prefix says which.
-  const source = pull
+  const source = note
+    ? `note:${note}`
+    : pull
     ? `pull:${pull.number}`
     : branch
       ? `branch:${branch}`
@@ -169,6 +188,8 @@ export default function AiGeneratorPage() {
       if (selected) pick({ kind: 'pull', pull: selected });
     } else if (kind === 'branch') {
       pick({ kind: 'branch', name: target });
+    } else if (kind === 'note') {
+      pick({ kind: 'note', path: target });
     } else if (kind === 'module') {
       setPicked(null);
       setModulePath(target);
@@ -185,6 +206,11 @@ export default function AiGeneratorPage() {
     value: `pull:${p.number}`,
     label: `#${p.number} ${p.title} (${p.state === 'open' ? p.head : p.state})`,
   }));
+  const noteOptions = (notes.data ?? []).map((n) => ({
+    value: `note:${n.path}`,
+    label: noteLabel(n),
+  }));
+  const pickedNote = notes.data?.find((n) => n.path === note);
   const branchOptions = (branches.data?.branches ?? []).map((b) => ({
     value: `branch:${b.name}`,
     label:
@@ -200,6 +226,7 @@ export default function AiGeneratorPage() {
           branch,
           pull_number: pull?.number ?? null,
           commit: commit?.sha ?? '',
+          change_note: note,
           output_type: outputType,
           coverage: coverage.length ? coverage : ['POSITIVE'],
         })
@@ -358,7 +385,7 @@ export default function AiGeneratorPage() {
               )}
               <Field
                 label="Source"
-                hint="A module reads its files on the default branch; a pull request, branch or commit reads only what it changed."
+                hint="A change note drafts from the note and the code it names. A module reads its files on the default branch; a pull request, branch or commit reads only what it changed."
               >
                 {(id) => (
                   <Select<string>
@@ -367,6 +394,9 @@ export default function AiGeneratorPage() {
                     onChange={selectSource}
                     disabled={!modules.data}
                     groups={[
+                      ...(noteOptions.length
+                        ? [{ label: 'Change notes', options: noteOptions }]
+                        : []),
                       {
                         label: 'Modules',
                         options: [
@@ -416,7 +446,9 @@ export default function AiGeneratorPage() {
                 <Note tone="indigo">
                   <span className="flex items-start gap-2">
                     <span className="flex-1">
-                      {pull
+                      {note
+                        ? `From change note ${pickedNote ? noteLabel(pickedNote) : note} — drafts from the note and the code files it names`
+                        : pull
                         ? `From PR #${pull.number}: ${pull.title} — reads the files this pull request changes`
                         : commit
                           ? `From commit ${commit.sha.slice(0, 7)}: ${commit.message} — reads the files it changes`
@@ -431,6 +463,36 @@ export default function AiGeneratorPage() {
                     </button>
                   </span>
                 </Note>
+              )}
+              {note && (
+                <div className="flex flex-col gap-2 rounded-lg border border-line bg-subtle p-3">
+                  <span className="flex items-center gap-2 text-[12.5px] font-medium">
+                    <FileText className="size-3.5 text-ink-3" />
+                    {pickedNote ? noteLabel(pickedNote) : note}
+                  </span>
+                  <State loading={noteContent.isLoading} error={noteContent.error} />
+                  {noteContent.data && (
+                    <>
+                      <pre className="scrollbar-thin max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-surface p-3 font-mono text-[12px] leading-relaxed text-ink">
+                        {noteContent.data.content}
+                      </pre>
+                      <span className="text-xs text-ink-3">
+                        {noteContent.data.files.length
+                          ? `Also reads ${noteContent.data.files.length} code file${noteContent.data.files.length === 1 ? '' : 's'} it names, for real field names and messages:`
+                          : 'It names no code files in the repository, so only its text is used.'}
+                      </span>
+                      {noteContent.data.files.length > 0 && (
+                        <ul className="flex flex-wrap gap-1.5">
+                          {noteContent.data.files.map((f) => (
+                            <li key={f} className="rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-[11px] text-ink-2">
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
               <div className="flex flex-col gap-1.5">
                 <span className="text-[12.5px] font-medium">Generate</span>
@@ -503,6 +565,14 @@ export default function AiGeneratorPage() {
               onSelectPull={selectPull}
               selectedCommit={commit?.sha}
               onSelectCommit={selectCommit}
+              selectedBranch={branch}
+              onSelectBranch={(name) =>
+                pick(branch === name ? null : { kind: 'branch', name })
+              }
+              selectedNote={note}
+              onSelectNote={(path) =>
+                pick(note === path ? null : { kind: 'note', path })
+              }
             />
           </div>
 

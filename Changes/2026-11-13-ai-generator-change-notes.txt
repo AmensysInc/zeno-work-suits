@@ -1,0 +1,87 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: AI generator — draft stories and test cases from Change notes, no GitHub access needed
+App: Zeno TeamSuite (frontend Next.js + backend FastAPI)
+================================================================================
+
+Problem reported: in the AI generator, clicking a branch opened GitHub. Most
+people (BA, QA) have no access to the private repository, so the link failed.
+There was also no way to pick the Changes/ notes and generate from them.
+
+
+--------------------------------------------------------------------------------
+1) AI GENERATOR — "Change notes" as a source
+--------------------------------------------------------------------------------
+Page name : AI Generator
+Route     : /ai-generator?project=<projectId>
+Files:
+  - frontend/src/app/(app)/ai-generator/page.tsx
+  - frontend/src/types/index.ts
+  - backend/app/api/ai_generator.py
+  - backend/app/schemas/ai_generator.py
+  - backend/app/services/ai_generator.py
+  - backend/tests/test_change_notes.py      (NEW)
+
+What changed:
+  - The Source dropdown has a new first group, "Change notes". It lists every
+    file in the repository's Changes/ folder, newest first, shown as
+    "2026-11-13 · Project video calls".
+  - Picking a note shows its full text inside the app, plus the list of code
+    files it names. No GitHub login or repository access is needed: the server
+    reads the note for you.
+  - Generate drafts stories, acceptance criteria and test cases for exactly what
+    the note describes. It uses the note's "Test ideas" section, and reads the
+    code files listed under "Files:" so field names, routes and messages are real.
+  - Review and Save work as before (tick items, save to the project).
+  - Saved items remember which note they came from. A note is a fixed record,
+    so its items are never flagged "out of date".
+
+
+--------------------------------------------------------------------------------
+2) AI GENERATOR — Repository panel (right side)
+--------------------------------------------------------------------------------
+Page name : AI Generator (repository panel)
+Files:
+  - frontend/src/components/github/repo-activity.tsx
+
+What changed:
+  - New first tab "Notes": the same change notes. Click one to select it (click
+    again to clear).
+  - Branches tab: clicking a branch now SELECTS it for generating, the same as
+    pull requests and commits. It no longer jumps to GitHub.
+  - The small ↗ icon on a row still opens GitHub, for people with access. Its
+    tooltip now says it needs repository access.
+  - The separate GitHub page is unchanged.
+
+
+--------------------------------------------------------------------------------
+TEST IDEAS FOR BA / QA
+--------------------------------------------------------------------------------
+Positive:
+  - Open AI Generator for a project with a linked repository. Source →
+    "Change notes" lists the notes, newest first.
+  - Pick "2026-11-13 · Project video calls". The note text shows on the page,
+    with "Also reads N code files…" and the file names.
+  - Choose Generate = Both and coverage Positive + Negative. Press Generate.
+    The stories are about video calls (Call button, Join, call bar), and the
+    test cases follow the note's test ideas.
+  - Tick a few items and Save. They appear in the project's stories and test cases.
+  - Right panel → Notes tab: click a note. It becomes the selected source and is
+    ticked. Click it again to clear.
+  - Right panel → Branches tab: click a branch. It becomes the selected source
+    ("From branch … reads the files it changes"). It does NOT open GitHub.
+  - Use a user who has NO GitHub access. All of the above works.
+Negative:
+  - A project with no linked repository shows the "Link a repository" message
+    and no notes.
+  - A repository without a Changes/ folder shows "No change notes yet".
+  - An empty note gives the message "This change note is empty".
+Regression:
+  - Generating from a module, pull request, branch or commit works as before.
+  - "Out of date" suggestions still work for items generated from code.
+
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------

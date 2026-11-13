@@ -5,12 +5,14 @@ import Link from 'next/link';
 import {
   CheckCircle2,
   ExternalLink,
+  FileText,
   GitBranch,
   GitCommitHorizontal,
   GitPullRequest,
 } from 'lucide-react';
 import { useData } from '@/hooks/data';
 import type {
+  ChangeNote,
   GitHubBranches,
   GitHubCommit,
   GitHubPull,
@@ -22,7 +24,7 @@ import { Select } from '@/components/ui/select';
 import { GithubIcon } from '@/components/ui/glyphs';
 import { cn } from '@/lib/utils';
 
-type Tab = 'pulls' | 'branches' | 'commits';
+type Tab = 'notes' | 'pulls' | 'branches' | 'commits';
 const date = (value: string) =>
   value ? new Date(value).toLocaleDateString() : '';
 const Code = ({ children }: { children: string }) => (
@@ -83,7 +85,7 @@ function OpenLink({ href, label }: { href: string; label: string }) {
       target="_blank"
       rel="noreferrer"
       aria-label={label}
-      title="Open on GitHub"
+      title="Open on GitHub (needs access to the repository)"
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
       className="shrink-0 text-ink-3 hover:text-ink"
@@ -167,23 +169,55 @@ function Pulls({
   );
 }
 
-function Branches({ repo }: { repo?: GitHubBranches }) {
+function Branches({
+  repo,
+  selected,
+  onSelect,
+}: {
+  repo?: GitHubBranches;
+  selected?: string;
+  onSelect?: (name: string) => void;
+}) {
   if (!repo) return null;
   if (!repo.branches.length)
     return <None>This repository has no branches yet.</None>;
   return (
     <ul>
+      {onSelect && (
+        <Hint>Select a branch to generate from the code it changes.</Hint>
+      )}
       {repo.branches.map((b) => (
-        <Row key={b.name} selected={false}>
-          <a
-            href={`${repo.html_url}/tree/${b.name}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2 text-[13px] font-medium hover:text-accent-ink"
-          >
-            <GitBranch className="size-3.5 text-ink-3" />
-            {b.name}
-          </a>
+        <Row
+          key={b.name}
+          selected={selected === b.name}
+          onSelect={onSelect && (() => onSelect(b.name))}
+        >
+          {onSelect ? (
+            // Selecting stays in the app; only the small icon opens GitHub,
+            // which needs access to the repository.
+            <div className="flex items-center gap-2 text-[13px] font-medium">
+              {selected === b.name ? (
+                <CheckCircle2 className="size-3.5 shrink-0 text-accent" />
+              ) : (
+                <GitBranch className="size-3.5 shrink-0 text-ink-3" />
+              )}
+              <span className="min-w-0 flex-1 truncate">{b.name}</span>
+              <OpenLink
+                href={`${repo.html_url}/tree/${b.name}`}
+                label={`Open branch ${b.name} on GitHub`}
+              />
+            </div>
+          ) : (
+            <a
+              href={`${repo.html_url}/tree/${b.name}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-[13px] font-medium hover:text-accent-ink"
+            >
+              <GitBranch className="size-3.5 text-ink-3" />
+              {b.name}
+            </a>
+          )}
           <div className="flex flex-wrap items-center gap-1.5">
             {b.name === repo.default_branch && (
               <Badge tone="green">Default</Badge>
@@ -282,7 +316,57 @@ function Commits({
   );
 }
 
-/** Pull requests, branches and commits of the project's linked repository. */
+/** The repository's Changes/ notes, read on the server, so no GitHub access is needed. */
+function Notes({
+  projectId,
+  repoName,
+  selected,
+  onSelect,
+}: {
+  projectId: number;
+  repoName: string;
+  selected?: string;
+  onSelect: (path: string) => void;
+}) {
+  const notes = useData<ChangeNote[]>(
+    `/ai-generator/projects/${projectId}/change-notes?repo=${encodeURIComponent(repoName)}`,
+  );
+  return (
+    <>
+      <State loading={notes.isLoading} error={notes.error} />
+      {notes.data?.length === 0 && (
+        <None>No change notes yet. They live in the repository&apos;s Changes/ folder.</None>
+      )}
+      {!!notes.data?.length && (
+        <Hint>Select a change note to read it and draft from it.</Hint>
+      )}
+      <ul>
+        {notes.data?.map((n) => (
+          <Row
+            key={n.path}
+            selected={selected === n.path}
+            onSelect={() => onSelect(n.path)}
+          >
+            <div className="flex items-start gap-2 text-[13px]">
+              {selected === n.path ? (
+                <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-accent" />
+              ) : (
+                <FileText className="mt-0.5 size-3.5 shrink-0 text-ink-3" />
+              )}
+              <span className="min-w-0 flex-1 font-medium">{n.title}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-3">
+              {n.date && <span>{n.date}</span>}
+              <Code>{n.path.split('/').pop() ?? n.path}</Code>
+            </div>
+          </Row>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** Change notes, pull requests, branches and commits of the project's linked repository. */
 export default function RepoActivity({
   project,
   repository,
@@ -291,6 +375,10 @@ export default function RepoActivity({
   onSelectPull,
   selectedCommit,
   onSelectCommit,
+  selectedBranch,
+  onSelectBranch,
+  selectedNote,
+  onSelectNote,
 }: {
   project?: Project;
   /** Which linked repository to show ("owner/name"); the project's first when left out. */
@@ -300,8 +388,13 @@ export default function RepoActivity({
   onSelectPull?: (pull: GitHubPull) => void;
   selectedCommit?: string;
   onSelectCommit?: (commit: GitHubCommit) => void;
+  selectedBranch?: string;
+  onSelectBranch?: (name: string) => void;
+  selectedNote?: string;
+  /** When set, a Change notes tab is shown first. */
+  onSelectNote?: (path: string) => void;
 }) {
-  const [tab, setTab] = useState<Tab>('pulls');
+  const [tab, setTab] = useState<Tab>(onSelectNote ? 'notes' : 'pulls');
   const name = repository || project?.repositories[0]?.full_name;
   const ready = !!project && !!name && configured !== false;
   const repo = useData<GitHubBranches>(
@@ -337,6 +430,19 @@ export default function RepoActivity({
             value={tab}
             onChange={setTab}
             items={[
+              ...(onSelectNote
+                ? [
+                    {
+                      key: 'notes' as const,
+                      label: (
+                        <span className="inline-flex items-center gap-1.5">
+                          <FileText className="size-3.5" />
+                          Notes
+                        </span>
+                      ),
+                    },
+                  ]
+                : []),
               {
                 key: 'pulls',
                 label: (
@@ -367,8 +473,16 @@ export default function RepoActivity({
             ]}
           />
           <div className="scrollbar-thin max-h-[560px] overflow-y-auto">
-            {tab !== 'pulls' && (
+            {(tab === 'branches' || tab === 'commits') && (
               <State loading={repo.isLoading} error={repo.error} />
+            )}
+            {tab === 'notes' && onSelectNote && (
+              <Notes
+                projectId={project!.id}
+                repoName={name}
+                selected={selectedNote}
+                onSelect={onSelectNote}
+              />
             )}
             {tab === 'pulls' && (
               <Pulls
@@ -378,7 +492,13 @@ export default function RepoActivity({
                 onSelect={onSelectPull}
               />
             )}
-            {tab === 'branches' && <Branches repo={repo.data} />}
+            {tab === 'branches' && (
+              <Branches
+                repo={repo.data}
+                selected={selectedBranch}
+                onSelect={onSelectBranch}
+              />
+            )}
             {tab === 'commits' && (
               <Commits
                 projectId={project!.id}
