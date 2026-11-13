@@ -1,0 +1,21 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: Deployment build fix (no feature change)
+================================================================================
+
+What happened: the production build failed at "npm ci" after the video-calls
+change. The frontend lock file (frontend/package-lock.json) was written by a
+newer npm and was missing two optional entries (@emnapi/core, @emnapi/runtime)
+that the server's Node 22 npm requires.
+
+Fix: the lock file was regenerated with Node 22 / npm 10, matching the server.
+The same LiveKit versions are still pinned (livekit-client 2.23.0,
+@livekit/components-react 2.9.24).
+Checked: npm ci and the full web and backend Docker images build cleanly on Node 22.
+
+Files:
+  - frontend/package-lock.json
+
+For BA / QA: nothing new to test. After deploy, run the checks in
+2026-11-13-project-video-calls.txt.
