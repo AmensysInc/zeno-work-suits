@@ -74,6 +74,44 @@ ALLOWED_CONTENT_TYPES = {
     "application/octet-stream",
 }
 
+# The stored and served type always comes from the file extension, never from the
+# uploader, so a file named "x.pdf" can't be sent back as SVG or HTML.
+TYPE_BY_EXTENSION = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".md": "text/markdown",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".odt": "application/vnd.oasis.opendocument.text",
+    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".odp": "application/vnd.oasis.opendocument.presentation",
+    ".rtf": "application/rtf",
+    ".zip": "application/zip",
+    ".rar": "application/x-rar-compressed",
+    ".7z": "application/x-7z-compressed",
+    ".json": "application/json",
+    ".xml": "application/xml",
+    ".yaml": "application/x-yaml",
+    ".yml": "application/x-yaml",
+}
+
+
+def content_type_for(filename: str) -> str:
+    return TYPE_BY_EXTENSION.get(Path(filename).suffix.lower(), "application/octet-stream")
+
+
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._\-\s()]+")
 
 
@@ -104,13 +142,13 @@ def _validate(file: UploadFile, size: int):
             422,
             "Unsupported file type. Use images, PDF, Office, text, or archive files.",
         )
-    content_type = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
-    if content_type not in ALLOWED_CONTENT_TYPES:
+    declared = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
+    if declared not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             422,
             "Unsupported file type. Use images, PDF, Office, text, or archive files.",
         )
-    return filename, content_type
+    return filename, content_type_for(filename)
 
 
 async def add_files(db, actor, issue_id: int, files: list[UploadFile]):
