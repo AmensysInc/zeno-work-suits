@@ -1,7 +1,9 @@
 # Production stack for zenoteamsuite.com.
 #   cp .env.production.example .env   (fill in the secrets)
 #   docker compose -f docker-compose.prod.yml up -d --build
-# Only the web container is published, and only on localhost; the host nginx proxies the domain to it.
+# The web container is published only on localhost; the host nginx proxies the domain to it.
+# Video calls (livekit): signalling is proxied by the host nginx at /rtc; call media uses
+# LIVEKIT_TCP_PORT and LIVEKIT_UDP_PORT directly, so open those two in the VPS firewall.
 # Kept from the old domain: renaming the project would start on a new, empty database volume.
 name: zenoworksuite
 
@@ -42,6 +44,10 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       UPLOAD_DIR: /app/uploads
+      LIVEKIT_URL: ${LIVEKIT_URL:-wss://zenoteamsuite.com}
+      LIVEKIT_API_URL: http://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env (see .env.production.example)}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env (see .env.production.example)}
     volumes:
       - uploads:/app/uploads
     depends_on:
@@ -63,6 +69,29 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    logging: *logging
+
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    restart: unless-stopped
+    environment:
+      # The whole server config; use_external_ip finds the VPS public IP for call media.
+      LIVEKIT_CONFIG: |
+        port: 7880
+        log_level: info
+        rtc:
+          tcp_port: ${LIVEKIT_TCP_PORT:-7881}
+          udp_port: ${LIVEKIT_UDP_PORT:-7882}
+          use_external_ip: true
+        room:
+          empty_timeout: 300
+          max_participants: 50
+        keys:
+          ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+    ports:
+      - "127.0.0.1:${LIVEKIT_HTTP_PORT:-7880}:7880"
+      - "${LIVEKIT_TCP_PORT:-7881}:${LIVEKIT_TCP_PORT:-7881}/tcp"
+      - "${LIVEKIT_UDP_PORT:-7882}:${LIVEKIT_UDP_PORT:-7882}/udp"
     logging: *logging
 
 volumes:
