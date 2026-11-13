@@ -192,6 +192,112 @@ def modules(db, actor, project_id, repo=None):
     ]
 
 
+CHANGES_FOLDER = "changes"
+NOTE_EXTENSIONS = (".txt", ".md")
+# Most code files a note can pull in alongside its own text.
+MAX_NOTE_FILES = 40
+# Repository paths written in a note, e.g. "frontend/src/app/(app)/chat/page.tsx".
+NOTE_PATH = re.compile(r"[\w.()\[\]@-]+(?:/[\w.()\[\]@-]+)+\.\w{1,6}")
+NOTE_NAME = re.compile(r"^(\d{4}-\d{2}-\d{2})[-_ ]*(.*)$")
+
+
+def _note_meta(path):
+    """Date and readable title from a file name like 2026-11-13-video-calls.txt."""
+    stem = path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    match = NOTE_NAME.match(stem)
+    date, rest = (match.group(1), match.group(2)) if match else ("", stem)
+    title = re.sub(r"[-_]+", " ", rest).strip() or stem
+    return {"path": path, "date": date, "title": title[:1].upper() + title[1:]}
+
+
+def _note_paths(items):
+    """Change notes in the tree: files directly inside a top-level Changes/ folder."""
+    return [
+        item["path"]
+        for item in items
+        if item.get("type") == "blob"
+        and item.get("path", "").count("/") == 1
+        and item["path"].split("/")[0].lower() == CHANGES_FOLDER
+        and item["path"].lower().endswith(NOTE_EXTENSIONS)
+    ]
+
+
+def change_notes(db, actor, project_id, repo=None):
+    _, name = _repo(db, actor, project_id, repo)
+    items, _ = _tree(name, _default_branch(name))
+    notes = [_note_meta(p) for p in _note_paths(items)]
+    # Newest first: dated names sort by date; undated ones go last.
+    return sorted(notes, key=lambda n: (n["date"], n["path"]), reverse=True)
+
+
+def _note_files(text, items):
+    """Source files named in a note that exist in the repository, in mention order."""
+    sizes = {
+        item["path"]: int(item.get("size") or 0)
+        for item in items
+        if item.get("type") == "blob"
+    }
+    found = []
+    for match in NOTE_PATH.findall(text):
+        path = match.strip("./")
+        if (
+            path in sizes
+            and path not in found
+            and _is_source(path)
+            and sizes[path] <= MAX_FILE_BYTES
+        ):
+            found.append(path)
+    return found[:MAX_NOTE_FILES]
+
+
+def _load_note(name, path):
+    """(default-branch sha, tree items, note text) for one change note."""
+    sha = _branch_sha(name, _default_branch(name))
+    items, _ = _tree(name, sha)
+    if path not in _note_paths(items):
+        raise HTTPException(404, "Change note not found")
+    text = _read_source(name, sha, path)
+    if not text.strip():
+        raise HTTPException(422, "This change note is empty")
+    return sha, items, text
+
+
+def change_note(db, actor, project_id, path, repo=None):
+    _, name = _repo(db, actor, project_id, repo)
+    _, items, text = _load_note(name, path)
+    return {**_note_meta(path), "content": text, "files": _note_files(text, items)}
+
+
+def _note_sources(name, path):
+    """The note itself first, then the code it names, so drafts use real names."""
+    sha, items, text = _load_note(name, path)
+    files = _note_files(text, items)
+    contents = _read_many(name, sha, files)
+    sources = [{"path": path, "area": "Change note", "content": text}] + [
+        {"path": f, "area": "/".join(f.split("/")[:2]), "content": contents[f]}
+        for f in files
+        if contents[f].strip()
+    ]
+    if len(sources) > 1:
+        note = (
+            f"Drafted from the change note {path} and the "
+            f"{len(sources) - 1} code files it names."
+        )
+    else:
+        note = (
+            f"Drafted from the change note {path}; it names no code files in the "
+            "repository, so only its text was used."
+        )
+    meta = _note_meta(path)
+    heading = f"Change note: {meta['title']}" + (
+        f" ({meta['date']})" if meta["date"] else ""
+    )
+    # The whole note goes in the shared context, so every part of a large draft
+    # (not only the one holding the note's own source entry) knows what changed.
+    context = f"{heading}\n\n{text[:MAX_CHARS_PER_FILE]}"
+    return sha, context, sources, [note], [s["path"] for s in sources[1:]]
+
+
 def _folders(path):
     """Every folder above a file, outermost first."""
     parts = path.split("/")[:-1]
@@ -411,6 +517,9 @@ def _no_changes(label, module_path):
 def _resolve(name, data):
     """The code to draft from: (kind, ref, commit, context, sources, notes, outline)."""
     module = data.module_path
+    if data.change_note:
+        sha, context, sources, notes, outline = _note_sources(name, data.change_note)
+        return "NOTE", data.change_note, sha, context, sources, notes, outline
     if data.pull_number:
         number = data.pull_number
         pull = github.call("GET", f"/repos/{name}/pulls/{number}")
@@ -850,6 +959,14 @@ def _rules(data, changed, part, parts, with_existing):
             "and 'content' the start of the file after the change. Describe only the "
             "behavior the change adds or alters, not the rest of the file."
         )
+    if getattr(data, "change_note", ""):
+        rules.append(
+            "'source' is a change note written for business analysts: it names the "
+            "pages, routes and files that changed, says what changed, and lists test "
+            "ideas. Draft stories and tests for exactly the changes it describes, use its "
+            "test ideas, and use the code in 'sources' for the real field names, routes, "
+            "limits and messages. Do not describe unrelated parts of the code."
+        )
     if parts > 1:
         rules.append(
             f"This is part {part} of {parts} of the code; 'outline' lists every area of "
@@ -1241,8 +1358,9 @@ def suggestions(db, actor, project_id):
         key = (name, kind, ref)
         if key not in heads:
             try:
-                if kind == "COMMIT":
-                    heads[key] = None  # Pinned to one commit: never out of date.
+                if kind in ("COMMIT", "NOTE"):
+                    # Pinned to one commit, or a note describing one change: never stale.
+                    heads[key] = None
                 elif kind == "PULL":
                     heads[key] = github.call("GET", f"/repos/{name}/pulls/{ref}")[
                         "head"

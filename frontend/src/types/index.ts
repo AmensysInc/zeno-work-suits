@@ -128,8 +128,20 @@ export const generatorCoverage = [
   'VALIDATION',
 ] as const;
 export type GeneratorCoverage = (typeof generatorCoverage)[number];
-/** A folder of the default branch, or what a branch, pull request or commit changed. */
-export type GeneratorSourceKind = 'DEFAULT' | 'BRANCH' | 'PULL' | 'COMMIT';
+/** A folder of the default branch, what a branch, pull request or commit changed, or a change note. */
+export type GeneratorSourceKind = 'DEFAULT' | 'BRANCH' | 'PULL' | 'COMMIT' | 'NOTE';
+/** A file in the repository's Changes/ folder, written for BAs. */
+export interface ChangeNote {
+  path: string;
+  /** From the file name (YYYY-MM-DD-topic.txt); empty when it has none. */
+  date: string;
+  title: string;
+}
+export interface ChangeNoteContent extends ChangeNote {
+  content: string;
+  /** Code files the note names that exist in the repository. */
+  files: string[];
+}
 export interface AiSource {
   repository: string;
   module_path: string;
