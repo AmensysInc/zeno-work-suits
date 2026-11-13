@@ -12,6 +12,7 @@ import {
   FlaskConical,
   Folder,
   House,
+  CalendarDays,
   KeyRound,
   Kanban,
   LayoutGrid,
@@ -282,6 +283,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </div>
       <div className="mt-1.5" />
       <NavItem item={{ name: 'Home', href: '/dashboard', icon: <House /> }} active={isActive('/dashboard')} onNavigate={close} />
+      <NavItem item={{ name: 'Calendar', href: '/calendar', icon: <CalendarDays /> }} active={isActive('/calendar')} onNavigate={close} />
       <NavItem item={{ name: 'My issues', href: '/my-issues', icon: <User /> }} active={isActive('/my-issues')} onNavigate={close} />
       <NavItem item={{ name: 'Projects', href: '/projects', icon: <Folder /> }} active={isActive('/projects')} onNavigate={close} />
       <ProjectSwitcher projects={projects.data ?? []} current={project} onPick={switchProject} />

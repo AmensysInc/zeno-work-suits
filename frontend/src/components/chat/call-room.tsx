@@ -90,7 +90,7 @@ function MiniStage() {
  * person uses the rest of the app.
  */
 export default function CallRoom({
-  projectId,
+  joinPath,
   title,
   userName,
   minimized,
@@ -99,7 +99,8 @@ export default function CallRoom({
   onClose,
   onJoined,
 }: {
-  projectId: number;
+  /** Where to ask for a join token: a project's or a meeting's call. */
+  joinPath: string;
   title: string;
   userName: string;
   minimized: boolean;
@@ -117,7 +118,7 @@ export default function CallRoom({
     if (joining) return;
     setJoining(true);
     try {
-      const res = await api.post<Join>(`/projects/${projectId}/call/join`);
+      const res = await api.post<Join>(joinPath);
       setChoices(values);
       setJoin(res.data);
       onJoined?.();

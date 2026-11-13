@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { MessageSquare, PhoneCall, Search, Send, Users, Video } from 'lucide-react';
 import { useCurrentProject } from '@/components/layout/context';
-import { useCall } from '@/components/chat/call-context';
+import { sameCall, useCall } from '@/components/chat/call-context';
 import { PageBar } from '@/components/layout/page';
 import { Avatar, AvatarStack, Empty, ProjectMark, State } from '@/components/ui/display';
 import { Button } from '@/components/ui/button';
@@ -88,8 +88,8 @@ export default function ChatPage() {
   const callActive = !!call.data?.active;
   const callPeople = call.data?.participants ?? [];
   // Already in (or minimized from) this project's call: the buttons bring it back.
-  const inThisCall = calls.call?.projectId === projectId;
-  const openCall = () => project && calls.open({ projectId: project.id, title: project.name });
+  const inThisCall = !!projectId && sameCall(calls.call, { kind: 'project', id: projectId });
+  const openCall = () => project && calls.open({ kind: 'project', id: project.id, title: project.name });
   const send = useMutation({
     mutationFn: async () => (await api.post<ChatMessage>(`/projects/${projectId}/chat`, { body: body.trim() })).data,
     onSuccess: () => {

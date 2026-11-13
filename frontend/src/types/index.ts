@@ -523,3 +523,22 @@ export interface VoiceTranscript {
   created_at: string;
   updated_at: string;
 }
+/** A colleague as the calendar shows them (no email or account details). */
+export interface Person {
+  id: number;
+  first_name: string;
+  last_name: string;
+  avatar_url: string | null;
+}
+export interface Meeting {
+  id: number;
+  title: string;
+  description: string;
+  /** ISO times in UTC; shown in the viewer's own time zone. */
+  starts_at: string;
+  ends_at: string;
+  organizer: Person;
+  attendees: Person[];
+  project: { id: number; key: string; name: string } | null;
+  created_at: string;
+}

@@ -1,0 +1,157 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-13
+Topic: Calendar — schedule meetings, invite people, join the meeting's video call
+App: Zeno TeamSuite (frontend Next.js + backend FastAPI + LiveKit)
+================================================================================
+
+A new Calendar page sits directly below Home in the left menu. People can
+schedule meetings, invite anyone in the company, and join each meeting's own
+video call (which can be minimized like project calls).
+
+Decisions (agreed 2026-11-13):
+  - Attendees: anyone in the company. Tagging a project is optional.
+  - Every meeting has its own private video call, with a Join button.
+  - Invited people see the meeting on their Calendar and on Home. No email yet.
+  - Repeating meetings: not in this version.
+
+
+--------------------------------------------------------------------------------
+1) CALENDAR PAGE
+--------------------------------------------------------------------------------
+Page name : Calendar
+Route     : /calendar        (left menu: Home → Calendar)
+Files:
+  - frontend/src/app/(app)/calendar/page.tsx                   (NEW)
+  - frontend/src/components/calendar/meeting-ui.tsx            (NEW)
+  - frontend/src/lib/meetings.ts                               (NEW)
+  - frontend/src/components/layout/app-shell.tsx   (menu link)
+
+What changed:
+  - Month view (Monday to Sunday), with Today and ‹ › buttons to change month.
+    Today's date is circled.
+  - Each day shows up to 3 meetings ("10:30 AM Sprint review"), then "+N more".
+    On phones, days show dots instead.
+  - Click a day to list its meetings on the right. Double-click a day to
+    schedule on that day.
+  - Click a meeting to see its details: date and time, project, agenda, and
+    people (the organizer is marked). Buttons: Join, Edit, Cancel meeting.
+  - "Schedule meeting" (top right) or "New" opens the form:
+      • Title (required)
+      • Date, Start, End. Default is the next half hour, 30 minutes long. The
+        length is shown under End. Maximum 12 hours. An end time earlier than
+        the start means the meeting runs past midnight.
+      • Invite people: search and tick anyone in the company. Picked people
+        show as chips with an ×. The organizer is always included.
+      • Project (optional), Agenda (optional)
+  - Times are saved in UTC and shown in each person's own time zone.
+  - The list refreshes every minute.
+
+
+--------------------------------------------------------------------------------
+2) HOME PAGE — Upcoming meetings
+--------------------------------------------------------------------------------
+Page name : Home
+Route     : /dashboard
+Files:
+  - frontend/src/components/calendar/upcoming-meetings.tsx     (NEW)
+  - frontend/src/app/(app)/dashboard/page.tsx
+
+What changed:
+  - A new "Upcoming meetings" card at the top shows your meetings from today
+    through the next 7 days (up to 5), with "Open calendar".
+  - A meeting that starts within 15 minutes, or is happening now, turns green
+    with a Join button.
+
+
+--------------------------------------------------------------------------------
+3) MEETING VIDEO CALLS
+--------------------------------------------------------------------------------
+Files:
+  - frontend/src/components/chat/call-context.tsx
+  - frontend/src/components/chat/call-room.tsx
+  - frontend/src/app/(app)/chat/page.tsx
+  - backend/app/services/calls.py
+
+What changed:
+  - Each meeting has its own private call room, separate from the project chat
+    calls. Only the organizer and invited people can join (admins can too).
+  - Join opens the same call window as Chats: device check, then the call.
+    Minimize keeps it running while you use other pages. While you are in it,
+    the button says "Return to call".
+  - Join is highlighted from 15 minutes before the start until the end. The
+    call can be opened at any time from the meeting details.
+  - One call at a time, the same rule as project calls.
+
+
+--------------------------------------------------------------------------------
+4) WHO CAN DO WHAT — Server rules
+--------------------------------------------------------------------------------
+API:
+  GET    /api/meetings?start=&end=   your meetings in a range (max 62 days)
+  POST   /api/meetings               schedule
+  GET    /api/meetings/{id}          details
+  PUT    /api/meetings/{id}          edit (organizer or admin)
+  DELETE /api/meetings/{id}          cancel (organizer or admin)
+  GET    /api/meetings/people        everyone who can be invited (names only, no emails)
+  GET    /api/meetings/{id}/call, POST /api/meetings/{id}/call/join
+Files:
+  - backend/app/models/meeting.py, backend/app/schemas/meeting.py   (NEW)
+  - backend/app/services/meetings.py, backend/app/api/meetings.py   (NEW)
+  - backend/app/migrations/versions/m7f1_meetings.py                (NEW, database change)
+  - backend/tests/test_meetings.py                                  (NEW, 10 tests)
+
+Rules:
+  - You see meetings you organize or are invited to. Admins can open any
+    meeting by link, but their calendar shows only their own meetings.
+  - Only the organizer (or an admin) can edit or cancel a meeting.
+  - You can tag only a project you can open.
+  - Invalid input is rejected: end before start, longer than 12 hours, a blank
+    title, or unknown people.
+
+
+--------------------------------------------------------------------------------
+TEST IDEAS FOR BA / QA
+--------------------------------------------------------------------------------
+Use two people, A and B.
+Positive:
+  - The left menu shows Calendar under Home. Open it: the current month shows
+    with today circled.
+  - A: Schedule meeting → title "Sprint review", today, the next half hour,
+    invite B → Schedule. The meeting shows on today's date and in the right
+    panel.
+  - B: open Calendar. The same meeting is there. On Home, "Upcoming meetings"
+    lists it.
+  - Within 15 minutes of the start, the row is green with Join. A and B both
+    join and can see and hear each other. Minimize, then open other pages: the
+    call continues.
+  - A: open the meeting → Edit → change the time and invite C → Save. B and C
+    see the new time.
+  - A: Cancel meeting → "Yes, cancel meeting". It disappears for everyone.
+  - Use ‹ › to go to the next month and back. Today returns to the current
+    month.
+  - Double-click a future day. The form opens on that date at 10:00 AM.
+Negative:
+  - Person C (not invited) cannot see the meeting or join its call.
+  - B (invited, not the organizer) sees Join but no Edit or Cancel buttons.
+  - End time 12+ hours after the start: "A meeting can be at most 12 hours
+    long".
+  - An empty title: the Schedule button stays disabled.
+Time zones:
+  - Someone in another time zone sees the same meeting at their own local time.
+Regression:
+  - Calls from Chats work as before ("Return to call", minimize).
+  - Home page tiles and charts are unchanged below the new card.
+
+Checked on 2026-11-13 in Chrome against a local LiveKit server:
+  - Calendar → Schedule, inviting Mia → shown on the 13th, in the day panel and
+    on Home.
+  - Mia's calendar lists it.
+  - Join → Minimize → Home: the meeting room showed 1 person, and the project
+    chat room stayed empty.
+  - The details show the people and Edit/Cancel. Leave empties the room.
+  - No console errors.
+
+--------------------------------------------------------------------------------
+END OF SUMMARY
+--------------------------------------------------------------------------------

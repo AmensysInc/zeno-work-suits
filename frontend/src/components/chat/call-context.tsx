@@ -9,40 +9,46 @@ import { useMe } from '@/hooks/data';
 // The call UI (LiveKit) is large and browser-only, so it loads when a call opens.
 const CallRoom = dynamic(() => import('@/components/chat/call-room'), { ssr: false });
 
-type ActiveCall = { projectId: number; title: string };
+/** A project chat's call, or a calendar meeting's own call. */
+export type CallTarget = { kind: 'project' | 'meeting'; id: number; title: string };
+
+export const sameCall = (a: CallTarget | null, b: Pick<CallTarget, 'kind' | 'id'>) =>
+  !!a && a.kind === b.kind && a.id === b.id;
+
+const base = (t: Pick<CallTarget, 'kind' | 'id'>) => (t.kind === 'project' ? `/projects/${t.id}` : `/meetings/${t.id}`);
 
 type CallApi = {
   /** The call this person is in (or setting up), if any. */
-  call: ActiveCall | null;
+  call: CallTarget | null;
   minimized: boolean;
-  /** Opens a project's call, or brings back the one already open for it. */
-  open: (call: ActiveCall) => void;
+  /** Opens a call, or brings back the one already open for it. */
+  open: (call: CallTarget) => void;
 };
 
 const CallContext = createContext<CallApi | null>(null);
 
 /**
- * Keeps one project call alive for the whole signed-in app, so it can be
- * minimized to a small floating window while the person moves between pages,
- * like Teams. It ends only on Leave, sign-out or a full page reload.
+ * Keeps one call alive for the whole signed-in app, so it can be minimized to
+ * a small floating window while the person moves between pages, like Teams.
+ * It ends only on Leave, sign-out or a full page reload.
  */
 export function CallProvider({ children }: { children: ReactNode }) {
-  const [call, setCall] = useState<ActiveCall | null>(null);
+  const [call, setCall] = useState<CallTarget | null>(null);
   const [minimized, setMinimized] = useState(false);
   const me = useMe();
   const qc = useQueryClient();
 
   const refresh = useCallback(
-    (projectId: number) => {
-      qc.invalidateQueries({ queryKey: [`/projects/${projectId}/call`] });
-      qc.invalidateQueries({ queryKey: [`/projects/${projectId}/chat`] });
+    (target: CallTarget) => {
+      qc.invalidateQueries({ queryKey: [`${base(target)}/call`] });
+      if (target.kind === 'project') qc.invalidateQueries({ queryKey: [`/projects/${target.id}/chat`] });
     },
     [qc],
   );
 
   const open = useCallback(
-    (next: ActiveCall) => {
-      if (call && call.projectId !== next.projectId) {
+    (next: CallTarget) => {
+      if (call && !sameCall(call, next)) {
         toast.error(`You are already in the ${call.title} call. Leave it before joining another.`);
       } else {
         setCall(next);
@@ -60,16 +66,16 @@ export function CallProvider({ children }: { children: ReactNode }) {
       {children}
       {call && (
         <CallRoom
-          key={call.projectId}
-          projectId={call.projectId}
+          key={`${call.kind}-${call.id}`}
+          joinPath={`${base(call)}/call/join`}
           title={call.title}
           userName={fullName}
           minimized={minimized}
           onMinimize={() => setMinimized(true)}
           onExpand={() => setMinimized(false)}
-          onJoined={() => refresh(call.projectId)}
+          onJoined={() => refresh(call)}
           onClose={() => {
-            refresh(call.projectId);
+            refresh(call);
             setCall(null);
             setMinimized(false);
           }}

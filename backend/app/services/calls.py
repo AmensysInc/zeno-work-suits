@@ -1,7 +1,8 @@
-"""Project video calls on a self-hosted LiveKit server.
+"""Video calls on a self-hosted LiveKit server.
 
-Each project has one call room, "project-<id>". Only people who can open the
-project get a join token, so access follows the same rules as the project chat.
+Each project has one call room, "project-<id>", for its chat; each calendar
+meeting has its own, "meeting-<id>". Only people who can open the project, or
+who organize or are invited to the meeting, get a join token.
 """
 
 import json
@@ -13,6 +14,7 @@ from fastapi import HTTPException
 
 from app.core.config import settings
 from app.models import ChatMessage
+from app.services import meetings
 from app.services.access import project_access
 
 TOKEN_TTL_SECONDS = 2 * 60 * 60
@@ -48,9 +50,16 @@ def _token(identity: str, grants: dict, name: str = "", metadata: str = "") -> s
     return jwt.encode(claims, settings.livekit_api_secret, algorithm="HS256")
 
 
+def meeting_room(meeting_id: int) -> str:
+    return f"meeting-{meeting_id}"
+
+
 def participants(project_id: int) -> list[dict]:
     """Who is in the project's call right now; empty when no call is running."""
-    room = room_name(project_id)
+    return _participants(room_name(project_id))
+
+
+def _participants(room: str) -> list[dict]:
     token = _token("zeno-backend", {"roomAdmin": True, "room": room})
     try:
         response = httpx.post(
@@ -93,11 +102,29 @@ def join(db, actor, project_id: int) -> dict:
     project_access(db, project_id, actor)
     if not enabled():
         raise HTTPException(503, "Video calls are not set up on this server")
-    room = room_name(project_id)
     if not participants(project_id):
         # The first person in posts to the project chat, so the team sees the call.
         db.add(ChatMessage(project_id=project_id, user_id=actor.id, body=CALL_STARTED))
         db.commit()
+    return _join_token(actor, room_name(project_id))
+
+
+def meeting_status(db, actor, meeting_id: int) -> dict:
+    meetings.visible(db, actor, meeting_id)
+    if not enabled():
+        return {"enabled": False, "active": False, "participants": []}
+    people = _participants(meeting_room(meeting_id))
+    return {"enabled": True, "active": bool(people), "participants": people}
+
+
+def meeting_join(db, actor, meeting_id: int) -> dict:
+    meetings.visible(db, actor, meeting_id)
+    if not enabled():
+        raise HTTPException(503, "Video calls are not set up on this server")
+    return _join_token(actor, meeting_room(meeting_id))
+
+
+def _join_token(actor, room: str) -> dict:
     token = _token(
         f"user-{actor.id}",
         {
