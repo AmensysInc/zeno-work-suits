@@ -3,11 +3,30 @@
 import '@livekit/components-styles';
 import { useState } from 'react';
 import { LiveKitRoom, PreJoin, VideoConference, type LocalUserChoices } from '@livekit/components-react';
+import { MediaDeviceFailure } from 'livekit-client';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, errorMessage } from '@/lib/api';
 
 type Join = { url: string; token: string; room: string };
+
+/**
+ * What to tell the person when a device can't be used, or null to say nothing.
+ * LiveKit reports screen sharing with no `kind`, and pressing Cancel in the
+ * browser's share picker arrives as "permission denied". That is a normal
+ * choice, not an error.
+ */
+function deviceFailureMessage(failure?: MediaDeviceFailure, kind?: MediaDeviceKind): string | null {
+  if (!kind) {
+    return failure === MediaDeviceFailure.PermissionDenied ? null : 'Screen sharing could not start. Try again.';
+  }
+  const device = kind === 'videoinput' ? 'camera' : 'microphone';
+  if (failure === MediaDeviceFailure.PermissionDenied)
+    return `Your ${device} is blocked. Allow it in the browser's site settings (the icon next to the address bar).`;
+  if (failure === MediaDeviceFailure.NotFound) return `No ${device} was found on this device.`;
+  if (failure === MediaDeviceFailure.DeviceInUse) return `Your ${device} is being used by another app. Close it and try again.`;
+  return `Could not use your ${device}.`;
+}
 
 /**
  * Full-screen project call on the self-hosted LiveKit server. A device check
@@ -76,7 +95,10 @@ export default function CallRoom({
           video={choices.videoEnabled ? { deviceId: choices.videoDeviceId || undefined } : false}
           onDisconnected={onClose}
           onError={(e) => toast.error(e.message)}
-          onMediaDeviceFailure={() => toast.error('Could not use your camera or microphone. Check the browser permission.')}
+          onMediaDeviceFailure={(failure, kind) => {
+            const message = deviceFailureMessage(failure, kind);
+            if (message) toast.error(message);
+          }}
           className="min-h-0 flex-1"
         >
           <VideoConference />
