@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import Meeting, User
 from app.models.meeting import meeting_attendees
+from app.services import notifications
 from app.services.access import is_admin, project_access
 
 MAX_RANGE_DAYS = 62
@@ -104,17 +105,23 @@ def create(db, actor, data):
     meeting = Meeting(organizer_id=actor.id, title="", description="")
     _apply(db, actor, meeting, data)
     db.add(meeting)
+    db.flush()
+    notifications.meeting_saved(db, actor, meeting)
     db.commit()
     return visible(db, actor, meeting.id)
 
 
 def update(db, actor, id, data):
     meeting = _editable(db, actor, id)
+    before = {u.id for u in meeting.attendees} | {meeting.organizer_id}
     _apply(db, actor, meeting, data)
+    notifications.meeting_saved(db, actor, meeting, before)
     db.commit()
     return visible(db, actor, id)
 
 
 def delete(db, actor, id):
-    db.delete(_editable(db, actor, id))
+    meeting = _editable(db, actor, id)
+    notifications.meeting_cancelled(db, actor, meeting)
+    db.delete(meeting)
     db.commit()

@@ -542,3 +542,20 @@ export interface Meeting {
   project: { id: number; key: string; name: string } | null;
   created_at: string;
 }
+
+/** Something that happened that the signed-in person should hear about. */
+export interface AppNotification {
+  id: number;
+  kind: string;
+  title: string;
+  body: string;
+  /** In-app path to open, e.g. "/issues/12". */
+  link: string;
+  read_at: string | null;
+  created_at: string;
+  actor: Person | null;
+}
+export interface NotificationList {
+  items: AppNotification[];
+  unread: number;
+}

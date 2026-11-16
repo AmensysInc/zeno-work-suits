@@ -46,6 +46,7 @@ import { GithubIcon } from '@/components/ui/glyphs';
 import { Input } from '@/components/ui/input';
 import { Menu, Popover } from '@/components/ui/controls';
 import { useTheme } from './theme';
+import { NotificationBell, NotificationsProvider } from './notifications';
 import { CreateContext, NavContext, PageProjectContext, ProjectContext } from './context';
 
 const CreateIssueDialog = lazy(() => import('@/components/issues/create-issue-dialog'));
@@ -269,6 +270,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <span className="truncate text-[13.5px] font-semibold tracking-tight">Zeno TeamSuite</span>
         </Link>
         <div className="flex items-center gap-0.5">
+          <NotificationBell />
           <Link href="/my-issues?q=" aria-label="Search issues" className="flex size-7 items-center justify-center rounded-md text-ink-2 hover:bg-hover">
             <Search className="size-[15px]" />
           </Link>
@@ -335,6 +337,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <ProjectContext.Provider value={projectId}>
         <CreateContext.Provider value={openCreate}>
           <NavContext.Provider value={() => setDrawer(true)}>
+            <NotificationsProvider>
             <div className="flex h-dvh bg-app">
               <div className="hidden lg:flex">{sidebar}</div>
               {drawer && (
@@ -352,6 +355,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 <CreateIssueDialog initial={create} onClose={() => setCreate(null)} />
               </Suspense>
             )}
+            </NotificationsProvider>
           </NavContext.Provider>
         </CreateContext.Provider>
       </ProjectContext.Provider>

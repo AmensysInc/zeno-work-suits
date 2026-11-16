@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import type { Project } from '@/types';
 import { ProjectMark } from '@/components/ui/display';
 import { useOpenNav } from './context';
+import { NotificationBell } from './notifications';
 
 type Crumb = string | { label: string; href: string };
 
@@ -61,6 +62,8 @@ export function PageBar({
       </nav>
       <div className="flex-1" />
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {/* On phones the sidebar (and its bell) is tucked away, so the bell sits here. */}
+      <NotificationBell align="end" className="lg:hidden" />
     </header>
   );
 }

@@ -14,3 +14,4 @@ from .automation import AutomationRule
 from .activity_log import ActivityLog
 from .voice_transcript import VoiceTranscript
 from .meeting import Meeting, meeting_attendees
+from .notification import Notification

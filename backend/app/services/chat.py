@@ -1,12 +1,14 @@
 from fastapi import HTTPException
 from app.models import ChatMessage
+from app.services import notifications
 from app.services.access import can_lead, project_access
 
 
 def create(db, actor, project_id, data):
-    project_access(db, project_id, actor)
+    project = project_access(db, project_id, actor)
     message = ChatMessage(project_id=project_id, user_id=actor.id, body=data.body)
     db.add(message)
+    notifications.chat_message(db, actor, project, data.body)
     db.commit()
     return message
 
