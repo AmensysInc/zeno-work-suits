@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { PageBar, PageBody } from '@/components/layout/page';
@@ -21,6 +22,33 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState(today);
   const [opened, setOpened] = useState<Meeting | null>(null);
   const [editing, setEditing] = useState<Meeting | 'new' | null>(null);
+  const params = useSearchParams();
+  const router = useRouter();
+  const linked = Number(params.get('meeting')) || 0;
+
+  // /calendar?meeting=12 (from a notification) jumps to that meeting and opens it.
+  useEffect(() => {
+    if (!linked) return;
+    let live = true;
+    api
+      .get<Meeting>(`/meetings/${linked}`)
+      .then(({ data }) => {
+        if (!live) return;
+        const day = startOfDay(new Date(data.starts_at));
+        setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+        setSelected(day);
+        setOpened(data);
+      })
+      .catch(() => {
+        /* cancelled or no longer invited: just show the calendar */
+      })
+      .finally(() => {
+        if (live) router.replace('/calendar');
+      });
+    return () => {
+      live = false;
+    };
+  }, [linked, router]);
 
   const days = useMemo(() => monthGrid(month), [month]);
   const start = days[0];

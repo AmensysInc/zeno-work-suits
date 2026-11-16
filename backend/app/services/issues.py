@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy import select, update, insert
 from app.models import Issue, Project, Sprint, TestCase, TestExecution, User
-from app.services import automations
+from app.services import automations, notifications
 from app.models.project import project_members
 from app.services.access import project_access, issue_access, require_lead, is_admin
 from app.services.activity import record
@@ -166,6 +166,7 @@ def add(db, project, values, actor):
     db.flush()
     set_assignees(db, issue, project, assignee_ids, actor)
     record(db, actor, project.id, issue.id, "created issue")
+    notifications.issue_created(db, actor, issue, assignee_ids)
     return issue
 
 
@@ -278,13 +279,15 @@ def apply(db, project, issue, values, actor):
     ):
         values["status"] = "BACKLOG"
     old_status = issue.status
+    before = [u.id for u in issue.assignees]
+    changes = []
     for key, value in values.items():
         old = getattr(issue, key)
         if old != value:
             record(db, actor, project.id, issue.id, "changed", key, old, value)
             setattr(issue, key, value)
+            changes.append((key, old, value))
     if assignee_ids is not None:
-        before = [u.id for u in issue.assignees]
         if before != assignee_ids:
             set_assignees(db, issue, project, assignee_ids, actor)
             record(
@@ -297,6 +300,14 @@ def apply(db, project, issue, values, actor):
                 ",".join(map(str, before)) or None,
                 ",".join(map(str, assignee_ids)) or None,
             )
+    notifications.issue_changed(
+        db,
+        actor,
+        issue,
+        changes,
+        before,
+        assignee_ids if assignee_ids is not None else before,
+    )
     if issue.status == old_status:
         return []
     return automations.run(db, actor, project, issue)

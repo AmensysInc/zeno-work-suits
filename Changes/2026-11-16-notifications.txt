@@ -1,0 +1,150 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-16
+Topic: Notifications — bell with unread count, and Chrome (desktop) alerts
+App: Zeno TeamSuite (frontend Next.js + backend FastAPI)
+================================================================================
+
+People now get notified when something involving them happens: a ticket is
+assigned to them, a ticket they are on changes or gets a comment, someone posts
+in their project chat, a call starts, or they are invited to a meeting. A bell
+in the left menu shows the unread count and the list. With permission, Chrome
+also shows a desktop notification while the person is in another tab or app.
+
+Rules for everyone:
+  - You are never notified about something you did yourself.
+  - Disabled accounts get nothing.
+  - Read notifications older than 90 days are cleaned up automatically.
+
+
+--------------------------------------------------------------------------------
+1) WHO GETS NOTIFIED, AND WHEN
+--------------------------------------------------------------------------------
+Files:
+  - backend/app/services/notifications.py                       (NEW)
+  - backend/app/models/notification.py                          (NEW)
+  - backend/app/migrations/versions/n8g2_notifications.py       (NEW, DB migration)
+  - backend/app/services/issues.py, comments.py, chat.py, calls.py, meetings.py
+
+  Event                                   Who gets it                         Opens
+  --------------------------------------  ----------------------------------  ----------------
+  New ticket with assignees               Each assignee                       The ticket
+  Ticket edited: assignee added           The newly added person              The ticket
+  Ticket edited: assignee removed         The removed person                  The ticket
+  Ticket edited: status / priority /      The reporter and current assignees  The ticket
+    title / description / dates / sprint
+    / epic / labels / points / type
+  Comment on a ticket                     The reporter and assignees          The ticket
+  Message in project chat                 Everyone on the project, + owner    Project chat
+  Video call started in a project         Everyone on the project, + owner    Project chat
+  Meeting scheduled                       Every invited person                That meeting
+  Meeting edited                          Newly invited: "invited you";       That meeting
+                                          others: "updated"; removed people:
+                                          "removed you"
+  Meeting cancelled                       Everyone invited, + the organizer   Calendar
+  First person joins a meeting's call     Everyone in the meeting             That meeting
+
+  - A status change shows old and new values, e.g. "Status: To Do → In Progress".
+  - Dragging a card to reorder it does NOT send a notification.
+  - Bulk edits send one notification per ticket.
+
+
+--------------------------------------------------------------------------------
+2) BELL AND NOTIFICATION LIST
+--------------------------------------------------------------------------------
+Page name : every signed-in page
+Where     : left menu, top row (bell next to Search). On phones it sits at the
+            right end of the top bar.
+Files:
+  - frontend/src/components/layout/notifications.tsx            (NEW)
+  - frontend/src/components/layout/app-shell.tsx
+  - frontend/src/components/layout/page.tsx
+
+What changed:
+  - A red badge shows the number of unread notifications (99+ when more).
+  - Clicking the bell opens the list (newest first, latest 30). Each row shows
+    an icon for the type, the title, a short preview and how long ago it was.
+    Unread rows are highlighted and have a blue dot.
+  - Clicking a row marks it read and opens the related page.
+  - "Mark all read" clears the badge.
+  - Empty state: "You're all caught up".
+  - The list checks for news every 15 seconds, even in a background tab.
+  - When news arrives while you are looking at the app, a small pop-up appears
+    in the bottom-right corner with an "Open" button. The page you are on also
+    refreshes (for example, a new chat message appears).
+
+
+--------------------------------------------------------------------------------
+3) CHROME / DESKTOP NOTIFICATIONS
+--------------------------------------------------------------------------------
+What changed:
+  - At the top of the bell list: "Turn on desktop notifications". Clicking it
+    shows Chrome's Allow / Block prompt.
+  - Once allowed, news that arrives while the app is NOT in front (another tab,
+    another app or a minimized window) shows as a Windows/Chrome desktop
+    notification. Clicking it brings the app forward and opens the related page.
+  - If the person blocked notifications, the list says how to allow them again
+    (the lock icon next to the address bar).
+  - Notifications only arrive while a Zeno TeamSuite tab is open, even in the
+    background. With the browser closed, nothing is shown; the bell has them
+    on the next visit.
+  - Desktop notifications need https (the live site) or localhost.
+
+
+--------------------------------------------------------------------------------
+4) CALENDAR LINK TO A MEETING
+--------------------------------------------------------------------------------
+Page name : Calendar
+Route     : /calendar?meeting=<id>
+Files:
+  - frontend/src/app/(app)/calendar/page.tsx
+
+What changed:
+  - Opening a meeting notification jumps the calendar to that month and day and
+    opens the meeting's details. If the meeting was cancelled, or you are no
+    longer invited, the normal calendar shows.
+
+
+--------------------------------------------------------------------------------
+API (for reference)
+--------------------------------------------------------------------------------
+  GET  /api/notifications            → { items: [...latest 30], unread: N }
+  POST /api/notifications/read       body { "ids": [1,2] } or { "all": true }
+  People can only see and mark their own notifications.
+
+
+--------------------------------------------------------------------------------
+TEST HINTS
+--------------------------------------------------------------------------------
+Use two browsers (or a normal and an incognito window) signed in as two people
+on the same project: A and B.
+
+Positive:
+  1. A creates a ticket assigned to B → B's bell shows 1 within about 15 seconds:
+     "A assigned you KEY-1". Clicking it opens the ticket, and the badge drops.
+  2. B moves the ticket to In Progress → A (the reporter) gets
+     "B updated KEY-1: …" with "Status: … → In Progress".
+  3. A comments on the ticket → B gets "A commented on KEY-1" with the text.
+  4. A reassigns the ticket from B to C → B gets "unassigned you", C gets
+     "assigned you".
+  5. A posts in the project chat → B gets "A in <Project>". The link opens chat.
+  6. A starts a video call → B gets "A started a video call".
+  7. A schedules a meeting inviting B → B gets an invite; clicking it opens the
+     calendar on that day with the meeting open. A edits it → B gets "updated".
+     A cancels → B gets "cancelled".
+  8. B allows desktop notifications, then switches to another app. A posts a
+     chat message → a Windows/Chrome notification appears. Clicking it opens
+     the chat.
+  9. "Mark all read" sets the badge to zero; rows lose the highlight.
+
+Negative:
+  10. A never gets notified about A's own actions.
+  11. Someone not on the project gets nothing for its chat, calls or tickets.
+  12. Reordering a card on the board or backlog sends nothing.
+  13. With desktop notifications blocked, nothing pops up outside the browser,
+      but the bell still counts. The list shows how to allow them again.
+  14. A disabled user gets no notifications.
+  15. Signed out → /api/notifications returns 401.
+
+Deploy note: there is a database migration (n8g2_notifications). It runs with
+the normal deploy. There are no new packages and no new settings.

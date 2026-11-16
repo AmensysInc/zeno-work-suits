@@ -14,7 +14,7 @@ from fastapi import HTTPException
 
 from app.core.config import settings
 from app.models import ChatMessage
-from app.services import meetings
+from app.services import meetings, notifications
 from app.services.access import project_access
 
 TOKEN_TTL_SECONDS = 2 * 60 * 60
@@ -99,12 +99,13 @@ def status(db, actor, project_id: int) -> dict:
 
 
 def join(db, actor, project_id: int) -> dict:
-    project_access(db, project_id, actor)
+    project = project_access(db, project_id, actor)
     if not enabled():
         raise HTTPException(503, "Video calls are not set up on this server")
     if not participants(project_id):
         # The first person in posts to the project chat, so the team sees the call.
         db.add(ChatMessage(project_id=project_id, user_id=actor.id, body=CALL_STARTED))
+        notifications.call_started(db, actor, project)
         db.commit()
     return _join_token(actor, room_name(project_id))
 
@@ -118,9 +119,13 @@ def meeting_status(db, actor, meeting_id: int) -> dict:
 
 
 def meeting_join(db, actor, meeting_id: int) -> dict:
-    meetings.visible(db, actor, meeting_id)
+    meeting = meetings.visible(db, actor, meeting_id)
     if not enabled():
         raise HTTPException(503, "Video calls are not set up on this server")
+    if not _participants(meeting_room(meeting_id)):
+        # The first person in lets the others know the call has begun.
+        notifications.meeting_call_started(db, actor, meeting)
+        db.commit()
     return _join_token(actor, meeting_room(meeting_id))
 
 

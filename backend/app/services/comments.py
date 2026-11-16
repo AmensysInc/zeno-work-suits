@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from app.models import Comment
 from app.services.access import issue_access, child_access, can_lead
 from app.services.activity import record
+from app.services import notifications
 
 
 def owned(db, id, actor, moderate=False):
@@ -20,6 +21,7 @@ def create(db, actor, issue_id, data):
     comment = Comment(issue_id=issue_id, user_id=actor.id, body=data.body)
     db.add(comment)
     record(db, actor, issue.project_id, issue.id, "added comment")
+    notifications.issue_commented(db, actor, issue, data.body)
     db.commit()
     return comment
 
