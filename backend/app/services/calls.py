@@ -138,6 +138,8 @@ def _join_token(actor, room: str) -> dict:
             "canPublish": True,
             "canSubscribe": True,
             "canPublishData": True,
+            # Lets the recorder show everyone a "Recording" badge.
+            "canUpdateOwnMetadata": True,
         },
         name=_full_name(actor),
         metadata=json.dumps({"user_id": actor.id}),

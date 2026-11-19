@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useMe, useProjects } from '@/hooks/data';
 import { api, errorMessage } from '@/lib/api';
-import { label, type ChatMessage, type Project } from '@/types';
+import { canLeadProject, label, type CallTranscript, type ChatMessage, type Project } from '@/types';
+import { TranscriptCard } from '@/components/calendar/meeting-chat';
 import { cn } from '@/lib/utils';
 
 /** Polling keeps the chat and the "call in progress" banner current without a reload. */
@@ -78,6 +79,12 @@ export default function ChatPage() {
     enabled: !!projectId,
     refetchInterval: REFRESH_MS,
   });
+  const transcripts = useQuery<CallTranscript[]>({
+    queryKey: [`/projects/${projectId}/transcripts`],
+    queryFn: async () => (await api.get<CallTranscript[]>(`/projects/${projectId}/transcripts`)).data,
+    enabled: !!projectId,
+    refetchInterval: REFRESH_MS,
+  });
   const call = useQuery<CallStatus>({
     queryKey: [`/projects/${projectId}/call`],
     queryFn: async () => (await api.get<CallStatus>(`/projects/${projectId}/call`)).data,
@@ -103,7 +110,7 @@ export default function ChatPage() {
   }, [router, params, projectId]);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.data?.length, projectId]);
+  }, [messages.data?.length, transcripts.data?.length, projectId]);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!body.trim() || send.isPending) return;
@@ -120,7 +127,13 @@ export default function ChatPage() {
         <State loading={projects.isLoading} error={projects.error} empty={projects.data?.length === 0} />
       </>
     );
-  let lastDay = '';
+  // Call transcripts sit in the timeline where their recording started.
+  const sorted: ({ kind: 'message'; at: string; m: ChatMessage } | { kind: 'transcript'; at: string; t: CallTranscript })[] = [
+    ...(messages.data ?? []).map((m) => ({ kind: 'message' as const, at: m.created_at, m })),
+    ...(transcripts.data ?? []).map((t) => ({ kind: 'transcript' as const, at: t.started_at, t })),
+  ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const timeline = sorted.map((item, i) => ({ ...item, d: day(item.at), divider: i === 0 || day(item.at) !== day(sorted[i - 1].at) }));
+  const canLead = !!project && canLeadProject(me.data, project);
   return (
     <>
       <PageBar crumbs={['Chats', project?.name ?? 'Project chat']} />
@@ -166,11 +179,30 @@ export default function ChatPage() {
                   Start the conversation for {project?.name ?? 'this project'}.
                 </Empty>
               )}
-              {messages.data?.map((m) => {
+              {timeline.map((item) => {
+                const { d, divider } = item;
+                if (item.kind === 'transcript') {
+                  const t = item.t;
+                  return (
+                    <div key={`t${t.id}`} className="flex flex-col gap-3">
+                      {divider && (
+                        <div className="flex items-center gap-3 text-[11.5px] font-medium text-ink-3">
+                          <span className="h-px flex-1 bg-line" />
+                          {d}
+                          <span className="h-px flex-1 bg-line" />
+                        </div>
+                      )}
+                      <TranscriptCard
+                        transcript={t}
+                        title={`${project?.name ?? 'Project'} call`}
+                        canDelete={canLead || t.user.id === me.data?.id}
+                        onDeleted={() => qc.invalidateQueries({ queryKey: [`/projects/${projectId}/transcripts`] })}
+                      />
+                    </div>
+                  );
+                }
+                const m = item.m;
                 const mine = m.user_id === me.data?.id;
-                const d = day(m.created_at);
-                const divider = d !== lastDay;
-                lastDay = d;
                 return (
                   <div key={m.id} className="flex flex-col gap-3">
                     {divider && (

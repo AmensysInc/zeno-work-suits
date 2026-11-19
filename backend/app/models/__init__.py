@@ -13,5 +13,5 @@ from .chat import ChatMessage
 from .automation import AutomationRule
 from .activity_log import ActivityLog
 from .voice_transcript import VoiceTranscript
-from .meeting import Meeting, meeting_attendees
+from .meeting import Meeting, MeetingMessage, CallTranscript, meeting_attendees
 from .notification import Notification

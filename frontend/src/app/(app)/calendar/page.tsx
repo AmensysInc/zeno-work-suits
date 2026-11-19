@@ -21,10 +21,12 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState(today);
   const [opened, setOpened] = useState<Meeting | null>(null);
+  const [openTab, setOpenTab] = useState<'details' | 'chat'>('details');
   const [editing, setEditing] = useState<Meeting | 'new' | null>(null);
   const params = useSearchParams();
   const router = useRouter();
   const linked = Number(params.get('meeting')) || 0;
+  const linkedTab = params.get('tab') === 'chat' ? 'chat' : 'details';
 
   // /calendar?meeting=12 (from a notification) jumps to that meeting and opens it.
   useEffect(() => {
@@ -37,6 +39,7 @@ export default function CalendarPage() {
         const day = startOfDay(new Date(data.starts_at));
         setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
         setSelected(day);
+        setOpenTab(linkedTab);
         setOpened(data);
       })
       .catch(() => {
@@ -48,7 +51,7 @@ export default function CalendarPage() {
     return () => {
       live = false;
     };
-  }, [linked, router]);
+  }, [linked, linkedTab, router]);
 
   const days = useMemo(() => monthGrid(month), [month]);
   const start = days[0];
@@ -200,8 +203,13 @@ export default function CalendarPage() {
 
       {opened && (
         <MeetingDetails
+          key={opened.id}
           meeting={opened}
-          onClose={() => setOpened(null)}
+          initialTab={openTab}
+          onClose={() => {
+            setOpened(null);
+            setOpenTab('details');
+          }}
           onEdit={() => {
             setEditing(opened);
             setOpened(null);

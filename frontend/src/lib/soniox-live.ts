@@ -8,6 +8,8 @@ export type LiveToken = {
   is_final: boolean;
   language?: string;
   speaker?: string;
+  /** With translation on: "original" is what was said, "translation" its translation. */
+  translation_status?: 'none' | 'original' | 'translation';
 };
 
 type Session = { api_key: string; websocket_url: string; model: string };
@@ -41,6 +43,15 @@ export interface LiveOptions {
   languages: string[];
   /** Write only in the listed languages, so speech never comes out in another script. */
   strict: boolean;
+  /**
+   * Audio to transcribe instead of the microphone, e.g. a call's mixed audio.
+   * The caller owns it, so stopping does not end its tracks.
+   */
+  stream?: MediaStream;
+  /** Also translate everything into this language (Soniox one-way translation). */
+  translateTo?: string;
+  /** Tell speakers apart (Speaker 1, 2…). On by default. */
+  diarize?: boolean;
   onTokens: (final: LiveToken[], pending: LiveToken[]) => void;
   onError: (message: string) => void;
   onEnd: () => void;
@@ -50,19 +61,24 @@ export interface LiveOptions {
 export async function startLive({
   languages,
   strict,
+  stream: given,
+  translateTo,
+  diarize = true,
   onTokens,
   onError,
   onEnd,
 }: LiveOptions) {
   const session = (await api.post<Session>('/voice/session')).data;
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      channelCount: 1,
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-  });
+  const stream =
+    given ??
+    (await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    }));
   const ctx = new AudioContext();
   const moduleUrl = URL.createObjectURL(
     new Blob([WORKLET], { type: 'application/javascript' }),
@@ -83,7 +99,7 @@ export async function startLive({
   const release = () => {
     source.disconnect();
     node.port.onmessage = null;
-    stream.getTracks().forEach((t) => t.stop());
+    if (!given) stream.getTracks().forEach((t) => t.stop());
     if (ctx.state !== 'closed') void ctx.close();
   };
   const finish = () => {
@@ -107,8 +123,9 @@ export async function startLive({
         sample_rate: ctx.sampleRate,
         num_channels: 1,
         enable_language_identification: true,
-        enable_speaker_diarization: true,
+        enable_speaker_diarization: diarize,
         enable_endpoint_detection: true,
+        ...(translateTo ? { translation: { type: 'one_way', target_language: translateTo } } : {}),
         ...(languages.length ? { language_hints: languages } : {}),
         ...(strict && languages.length ? { language_hints_strict: true } : {}),
       }),

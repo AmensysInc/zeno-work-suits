@@ -67,6 +67,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       {call && (
         <CallRoom
           key={`${call.kind}-${call.id}`}
+          target={call}
           joinPath={`${base(call)}/call/join`}
           title={call.title}
           userName={fullName}

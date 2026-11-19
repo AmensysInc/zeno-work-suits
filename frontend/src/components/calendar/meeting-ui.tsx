@@ -3,17 +3,20 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CalendarClock, Check, Pencil, Search, Trash2, Users, Video, X } from 'lucide-react';
+import { CalendarClock, Check, MessageSquare, Pencil, Repeat, Search, Trash2, Users, Video, X } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Tabs } from '@/components/ui/controls';
+import { MeetingChat } from './meeting-chat';
 import { Avatar, AvatarStack, Badge, ProjectMark } from '@/components/ui/display';
 import { useCall, sameCall } from '@/components/chat/call-context';
 import { useData, useMe, useProjects } from '@/hooks/data';
 import { api, errorMessage } from '@/lib/api';
 import {
   addDays,
+  addMonths,
   combine,
   dateValue,
   dayLabel,
@@ -22,10 +25,12 @@ import {
   joinable,
   nextSlot,
   range,
+  repeatLabel,
+  REPEAT_OPTIONS,
   timeValue,
 } from '@/lib/meetings';
 import { cn } from '@/lib/utils';
-import type { Meeting, Person } from '@/types';
+import type { Meeting, MeetingRepeat, Person, SeriesScope } from '@/types';
 
 /** Refreshes every calendar list and the Home card after a change. */
 function useRefreshMeetings() {
@@ -88,7 +93,10 @@ export function MeetingRow({ meeting, onOpen, showDate = false }: { meeting: Mee
           <span className="tnum text-ink-3">{range(meeting)}</span>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="truncate text-[13px] font-semibold">{meeting.title}</span>
+          <span className="flex items-center gap-1.5 truncate text-[13px] font-semibold">
+            {meeting.series_id && <Repeat aria-label="Repeating meeting" className="size-3 shrink-0 text-ink-3" />}
+            <span className="truncate">{meeting.title}</span>
+          </span>
           <span className="flex items-center gap-2 text-[11.5px] text-ink-3">
             {meeting.project && (
               <span className="inline-flex min-w-0 items-center gap-1">
@@ -106,15 +114,26 @@ export function MeetingRow({ meeting, onOpen, showDate = false }: { meeting: Mee
 }
 
 /** Details of one meeting, with Join, Edit and Cancel meeting. */
-export function MeetingDetails({ meeting, onClose, onEdit }: { meeting: Meeting; onClose: () => void; onEdit: () => void }) {
+export function MeetingDetails({
+  meeting,
+  onClose,
+  onEdit,
+  initialTab = 'details',
+}: {
+  meeting: Meeting;
+  onClose: () => void;
+  onEdit: () => void;
+  initialTab?: 'details' | 'chat';
+}) {
   const canEdit = useCanEdit(meeting);
   const refresh = useRefreshMeetings();
   const [confirm, setConfirm] = useState(false);
+  const [tab, setTab] = useState(initialTab);
   const cancel = useMutation({
-    mutationFn: async () => api.delete(`/meetings/${meeting.id}`),
-    onSuccess: () => {
+    mutationFn: async (scope: SeriesScope) => api.delete(`/meetings/${meeting.id}`, { params: { scope } }),
+    onSuccess: (_, scope) => {
       refresh();
-      toast.success('Meeting cancelled');
+      toast.success(scope === 'one' ? 'Meeting cancelled' : 'Meetings cancelled');
       onClose();
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -125,20 +144,39 @@ export function MeetingDetails({ meeting, onClose, onEdit }: { meeting: Meeting;
       onClose={onClose}
       title={meeting.title}
       description={`${dayLabel(start)} · ${range(meeting)}`}
+      width={620}
       footer={
         <>
           {canEdit &&
             (confirm ? (
-              <Button variant="danger" icon={<Trash2 />} loading={cancel.isPending} onClick={() => cancel.mutate()}>
-                Yes, cancel meeting
-              </Button>
+              meeting.series_id ? (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-ink-2">Cancel:</span>
+                  <Button size="sm" variant="danger" loading={cancel.isPending && cancel.variables === 'one'} onClick={() => cancel.mutate('one')}>
+                    This one
+                  </Button>
+                  <Button size="sm" variant="danger" loading={cancel.isPending && cancel.variables === 'following'} onClick={() => cancel.mutate('following')}>
+                    This and following
+                  </Button>
+                  <Button size="sm" variant="danger" loading={cancel.isPending && cancel.variables === 'all'} onClick={() => cancel.mutate('all')}>
+                    All
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
+                    Keep
+                  </Button>
+                </span>
+              ) : (
+                <Button variant="danger" icon={<Trash2 />} loading={cancel.isPending} onClick={() => cancel.mutate('one')}>
+                  Yes, cancel meeting
+                </Button>
+              )
             ) : (
               <Button variant="ghost" icon={<Trash2 />} onClick={() => setConfirm(true)}>
                 Cancel meeting
               </Button>
             ))}
           <span className="flex-1" />
-          {canEdit && (
+          {canEdit && !confirm && (
             <Button icon={<Pencil />} onClick={onEdit}>
               Edit
             </Button>
@@ -147,7 +185,32 @@ export function MeetingDetails({ meeting, onClose, onEdit }: { meeting: Meeting;
         </>
       }
     >
+      <Tabs
+        className="-mx-[18px] -mt-[18px] mb-4"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'details', label: 'Details' },
+          {
+            key: 'chat',
+            label: (
+              <span className="inline-flex items-center gap-1.5">
+                <MessageSquare className="size-3.5" /> Chat and transcripts
+              </span>
+            ),
+          },
+        ]}
+      />
+      {tab === 'chat' ? (
+        <MeetingChat meeting={meeting} />
+      ) : (
       <div className="flex flex-col gap-4">
+        {meeting.series_id && (
+          <span className="inline-flex items-center gap-2 text-[13px] text-ink-2">
+            <Repeat className="size-4 text-ink-3" />
+            {repeatLabel(meeting) || 'Part of a repeating series'}
+          </span>
+        )}
         {meeting.project && (
           <span className="inline-flex items-center gap-2 text-[13px]">
             <ProjectMark project={meeting.project} size={18} />
@@ -170,7 +233,11 @@ export function MeetingDetails({ meeting, onClose, onEdit }: { meeting: Meeting;
         {!joinable(meeting) && (
           <p className="text-xs text-ink-3">Join is highlighted from 15 minutes before the start; you can open the call any time.</p>
         )}
+        <p className="text-xs text-ink-3">
+          In the call, press Record to save a Soniox transcript to this meeting&apos;s chat, or pick a language under Translate for live captions.
+        </p>
       </div>
+      )}
     </Dialog>
   );
 }
@@ -243,6 +310,11 @@ export function MeetingForm({ meeting, day, onClose, onSaved }: { meeting?: Meet
   const [endTime, setEndTime] = useState(initial.end);
   const [projectId, setProjectId] = useState<number>(meeting?.project?.id ?? 0);
   const [attendees, setAttendees] = useState<number[]>(meeting?.attendees.map((p) => p.id) ?? []);
+  const [repeat, setRepeat] = useState<MeetingRepeat | 'NONE'>('NONE');
+  const [until, setUntil] = useState('');
+  const [scope, setScope] = useState<SeriesScope>('one');
+  /** The first meeting's date plus some months and days, as YYYY-MM-DD. */
+  const untilFor = (months: number, days = 0) => dateValue(addDays(addMonths(date ? combine(date, '00:00') : new Date(), months), days));
 
   const startsAt = date && startTime ? combine(date, startTime) : null;
   // An end time earlier than the start means the meeting runs past midnight.
@@ -255,7 +327,11 @@ export function MeetingForm({ meeting, day, onClose, onSaved }: { meeting?: Meet
       ? 'Choose a date, start and end time.'
       : minutes > 12 * 60
         ? 'A meeting can be at most 12 hours long.'
-        : null;
+        : repeat !== 'NONE' && (!until || until <= date)
+          ? 'Choose a repeat end date after the first meeting.'
+          : repeat !== 'NONE' && until > untilFor(12, 1)
+            ? 'A meeting can repeat for at most one year.'
+            : null;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -266,12 +342,19 @@ export function MeetingForm({ meeting, day, onClose, onSaved }: { meeting?: Meet
         ends_at: endsAt!.toISOString(),
         project_id: projectId || null,
         attendee_ids: attendees,
+        ...(repeat !== 'NONE' && !meeting
+          ? { repeat, repeat_until: until, time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+          : {}),
       };
-      return (meeting ? await api.put<Meeting>(`/meetings/${meeting.id}`, body) : await api.post<Meeting>('/meetings', body)).data;
+      return (
+        meeting
+          ? await api.put<Meeting>(`/meetings/${meeting.id}`, body, { params: { scope } })
+          : await api.post<Meeting>('/meetings', body)
+      ).data;
     },
     onSuccess: (saved) => {
       refresh();
-      toast.success(meeting ? 'Meeting updated' : 'Meeting scheduled');
+      toast.success(meeting ? 'Meeting updated' : repeat !== 'NONE' ? 'Repeating meeting scheduled' : 'Meeting scheduled');
       onSaved?.(saved);
       onClose();
     },
@@ -311,6 +394,64 @@ export function MeetingForm({ meeting, day, onClose, onSaved }: { meeting?: Meet
             {(id) => <Input id={id} type="time" step={300} value={endTime} onChange={(e) => setEndTime(e.target.value)} />}
           </Field>
         </div>
+        {meeting ? (
+          meeting.series_id && (
+            <Field label="Apply changes to" hint={repeatLabel(meeting)}>
+              {(id) => (
+                <Select<SeriesScope>
+                  id={id}
+                  value={scope}
+                  onChange={setScope}
+                  options={[
+                    { value: 'one', label: 'This meeting only' },
+                    { value: 'following', label: 'This and following meetings' },
+                    { value: 'all', label: 'All meetings in the series' },
+                  ]}
+                />
+              )}
+            </Field>
+          )
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={<span className="inline-flex items-center gap-1.5"><Repeat className="size-3.5" /> Repeat</span>}>
+              {(id) => (
+                <Select<MeetingRepeat | 'NONE'>
+                  id={id}
+                  value={repeat}
+                  onChange={(v) => {
+                    setRepeat(v);
+                    if (v !== 'NONE' && !until) setUntil(untilFor(1));
+                  }}
+                  options={REPEAT_OPTIONS}
+                />
+              )}
+            </Field>
+            {repeat !== 'NONE' && (
+              <Field label="Until" hint="Up to one year">
+                {(id) => (
+                  <div className="flex flex-col gap-1.5">
+                    <Input id={id} type="date" min={date} max={untilFor(12)} value={until} onChange={(e) => setUntil(e.target.value)} />
+                    <span className="flex flex-wrap gap-1">
+                      {([['1 week', 0, 7], ['1 month', 1, 0], ['3 months', 3, 0], ['6 months', 6, 0]] as const).map(([text, m, d]) => (
+                        <button
+                          key={text}
+                          type="button"
+                          onClick={() => setUntil(untilFor(m, d))}
+                          className={cn(
+                            'rounded-full border border-line px-2 py-0.5 text-[11.5px] text-ink-2 hover:bg-hover',
+                            until === untilFor(m, d) && 'border-accent bg-accent/10 text-accent',
+                          )}
+                        >
+                          {text}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                )}
+              </Field>
+            )}
+          </div>
+        )}
         <Field label={<span className="inline-flex items-center gap-1.5"><Users className="size-3.5" /> Invite people</span>} hint="Anyone in the company. You are included as the organizer.">
           {() => <PeoplePicker value={attendees} onChange={setAttendees} organizerId={organizerId} />}
         </Field>

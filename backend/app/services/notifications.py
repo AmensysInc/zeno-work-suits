@@ -188,8 +188,11 @@ def _meeting_people(meeting) -> set[int]:
     return {u.id for u in meeting.attendees} | {meeting.organizer_id}
 
 
-def meeting_saved(db, actor, meeting, before_ids=None):
-    """A new meeting invites everyone; an edit invites newcomers and tells the rest."""
+def meeting_saved(db, actor, meeting, before_ids=None, note=""):
+    """A new meeting invites everyone; an edit invites newcomers and tells the rest.
+
+    note: e.g. "Repeats every week until Dec 19" for a series, sent once.
+    """
     link = f"/calendar?meeting={meeting.id}"
     people = _meeting_people(meeting)
     invited = people if before_ids is None else people - set(before_ids)
@@ -199,7 +202,7 @@ def meeting_saved(db, actor, meeting, before_ids=None):
         actor,
         "meeting_invite",
         f"{name(actor)} invited you to “{meeting.title}”",
-        meeting.description,
+        note or meeting.description,
         link,
     )
     if before_ids is None:
@@ -210,7 +213,7 @@ def meeting_saved(db, actor, meeting, before_ids=None):
         actor,
         "meeting_updated",
         f"{name(actor)} updated “{meeting.title}”",
-        "Open the calendar to see the new details",
+        note or "Open the calendar to see the new details",
         link,
     )
     notify(
@@ -224,15 +227,46 @@ def meeting_saved(db, actor, meeting, before_ids=None):
     )
 
 
-def meeting_cancelled(db, actor, meeting):
+def meeting_cancelled(db, actor, meeting, note=""):
     notify(
         db,
         _meeting_people(meeting),
         actor,
         "meeting_cancelled",
         f"{name(actor)} cancelled “{meeting.title}”",
-        "",
+        note,
         "/calendar",
+    )
+
+
+def meeting_message(db, actor, meeting, body):
+    notify(
+        db,
+        _meeting_people(meeting),
+        actor,
+        "chat",
+        f"{name(actor)} in “{meeting.title}”",
+        body,
+        f"/calendar?meeting={meeting.id}&tab=chat",
+    )
+
+
+def transcript_ready(db, actor, transcript, meeting=None, project=None):
+    """Tells the meeting's people, or the project team, that a transcript is saved."""
+    if meeting is not None:
+        people, where = _meeting_people(meeting), f"“{meeting.title}”"
+        link = f"/calendar?meeting={meeting.id}&tab=chat"
+    else:
+        people, where = project_people(db, project), f"the {project.name} call"
+        link = f"/chat?project={project.id}"
+    notify(
+        db,
+        people,
+        actor,
+        "transcript",
+        f"Transcript of {where} is ready",
+        f"Recorded by {name(actor)}",
+        link,
     )
 
 

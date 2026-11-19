@@ -1,4 +1,4 @@
-import type { Meeting, Person } from '@/types';
+import type { Meeting, MeetingRepeat, Person } from '@/types';
 
 const DAY = 864e5;
 /** Join opens this long before a meeting starts. */
@@ -72,4 +72,29 @@ export function nextSlot(day?: Date) {
     base.setMinutes(base.getMinutes() < 30 ? 30 : 60);
   }
   return base;
+}
+
+export const REPEAT_OPTIONS: { value: MeetingRepeat | 'NONE'; label: string }[] = [
+  { value: 'NONE', label: 'Does not repeat' },
+  { value: 'DAILY', label: 'Every day' },
+  { value: 'WEEKDAYS', label: 'Every weekday (Mon–Fri)' },
+  { value: 'WEEKLY', label: 'Every week' },
+  { value: 'BIWEEKLY', label: 'Every 2 weeks' },
+  { value: 'MONTHLY', label: 'Every month' },
+];
+
+/** "Repeats every week until Dec 29, 2026" for a meeting in a series, else "". */
+export function repeatLabel(m: Pick<Meeting, 'repeat' | 'repeat_until'>) {
+  if (!m.repeat || !m.repeat_until) return '';
+  const how = REPEAT_OPTIONS.find((o) => o.value === m.repeat)?.label.toLowerCase() ?? '';
+  const [y, mo, d] = m.repeat_until.split('-').map(Number);
+  const until = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(y, mo - 1, d));
+  return `Repeats ${how} until ${until}`;
+}
+
+/** The same date some months later (the 31st becomes the month's last day). */
+export function addMonths(d: Date, n: number) {
+  const x = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  x.setDate(Math.min(d.getDate(), new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate()));
+  return x;
 }

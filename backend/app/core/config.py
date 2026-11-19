@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     soniox_api_key: str = ""
     sonix_api_key: str = ""
     # Soniox real-time model; language identification handles mixed-language speech.
-    soniox_model: str = "stt-rt-v5"
+    soniox_model: str = "stt-rt-v6"
     # Public URL used in login emails.
     app_url: str = "https://zenoteamsuite.com"
     # Optional: when set, new users and password resets are emailed via SendGrid.
