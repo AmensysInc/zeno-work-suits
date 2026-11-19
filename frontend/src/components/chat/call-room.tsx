@@ -2,7 +2,7 @@
 
 import '@livekit/components-styles';
 import './call-room.css';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ControlBar,
   LiveKitRoom,
@@ -19,6 +19,8 @@ import { Maximize2, Minimize2, MonitorUp, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import type { CallTarget } from './call-context';
+import { CallTools } from './call-tools';
 
 type Join = { url: string; token: string; room: string };
 
@@ -90,6 +92,7 @@ function MiniStage() {
  * person uses the rest of the app.
  */
 export default function CallRoom({
+  target,
   joinPath,
   title,
   userName,
@@ -99,6 +102,8 @@ export default function CallRoom({
   onClose,
   onJoined,
 }: {
+  /** The project or meeting this call belongs to; recordings are saved there. */
+  target: CallTarget;
   /** Where to ask for a join token: a project's or a meeting's call. */
   joinPath: string;
   title: string;
@@ -129,6 +134,34 @@ export default function CallRoom({
     }
   };
 
+  const header = (tools?: ReactNode) => (
+    <header className={cn('flex shrink-0 items-center gap-2 border-b border-white/10', mini ? 'h-10 px-2.5' : 'h-12 px-4')}>
+      <span className={cn('min-w-0 flex-1 truncate font-semibold', mini ? 'text-[12.5px]' : 'text-[14px]')}>
+        {title} · Call
+      </span>
+      {tools}
+      {join &&
+        (mini ? (
+          <button type="button" aria-label="Expand call" title="Expand" onClick={onExpand} className={iconButton}>
+            <Maximize2 className="size-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onMinimize}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] text-white/80 hover:bg-white/10 hover:text-white"
+          >
+            <Minimize2 className="size-4" /> Minimize
+          </button>
+        ))}
+      {!join && (
+        <button type="button" aria-label="Close" onClick={onClose} className={iconButton}>
+          <X className="size-4" />
+        </button>
+      )}
+    </header>
+  );
+
   const iconButton =
     'grid size-8 shrink-0 place-items-center rounded-md text-white/70 hover:bg-white/10 hover:text-white';
 
@@ -145,30 +178,6 @@ export default function CallRoom({
           : 'inset-0',
       )}
     >
-      <header className={cn('flex shrink-0 items-center gap-2 border-b border-white/10', mini ? 'h-10 px-2.5' : 'h-12 px-4')}>
-        <span className={cn('min-w-0 flex-1 truncate font-semibold', mini ? 'text-[12.5px]' : 'text-[14px]')}>
-          {title} · Call
-        </span>
-        {join &&
-          (mini ? (
-            <button type="button" aria-label="Expand call" title="Expand" onClick={onExpand} className={iconButton}>
-              <Maximize2 className="size-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onMinimize}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] text-white/80 hover:bg-white/10 hover:text-white"
-            >
-              <Minimize2 className="size-4" /> Minimize
-            </button>
-          ))}
-        {!join && (
-          <button type="button" aria-label="Close" onClick={onClose} className={iconButton}>
-            <X className="size-4" />
-          </button>
-        )}
-      </header>
       {join && choices ? (
         // One LiveKitRoom for both sizes, so minimizing never drops the connection.
         <LiveKitRoom
@@ -183,26 +192,39 @@ export default function CallRoom({
             const message = deviceFailureMessage(failure, kind);
             if (message) toast.error(message);
           }}
-          className="min-h-0 flex-1"
+          className="flex min-h-0 flex-1 flex-col"
         >
-          {mini ? <MiniStage /> : <VideoConference />}
+          <CallTools target={target} mini={mini}>
+            {(tools, overlay) => (
+              <>
+                {header(tools)}
+                <div className="relative min-h-0 flex-1">
+                  {mini ? <MiniStage /> : <VideoConference />}
+                  {overlay}
+                </div>
+              </>
+            )}
+          </CallTools>
         </LiveKitRoom>
       ) : (
-        // The name comes from the account; call-room.css hides PreJoin's name box.
-        <div className="grid min-h-0 flex-1 place-items-center overflow-auto p-4">
-          <div className="flex w-full max-w-[560px] flex-col gap-3">
-            <p className="text-center text-[13px] text-white/70">Check your camera and microphone, then join.</p>
-            <PreJoin
-              defaults={{ username: userName, videoEnabled: false, audioEnabled: true }}
-              onValidate={() => true}
-              onSubmit={(values) => void start({ ...values, username: userName })}
-              onError={(e) => toast.error(e.message)}
-              joinLabel={joining ? 'Joining…' : 'Join call'}
-              micLabel="Microphone"
-              camLabel="Camera"
-            />
+        <>
+          {header()}
+          {/* The name comes from the account; call-room.css hides PreJoin's name box. */}
+          <div className="grid min-h-0 flex-1 place-items-center overflow-auto p-4">
+            <div className="flex w-full max-w-[560px] flex-col gap-3">
+              <p className="text-center text-[13px] text-white/70">Check your camera and microphone, then join.</p>
+              <PreJoin
+                defaults={{ username: userName, videoEnabled: false, audioEnabled: true }}
+                onValidate={() => true}
+                onSubmit={(values) => void start({ ...values, username: userName })}
+                onError={(e) => toast.error(e.message)}
+                joinLabel={joining ? 'Joining…' : 'Join call'}
+                micLabel="Microphone"
+                camLabel="Camera"
+              />
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

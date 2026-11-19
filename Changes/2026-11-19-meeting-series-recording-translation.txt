@@ -1,0 +1,171 @@
+================================================================================
+Zeno TeamSuite — Change Summary
+Date: 2026-11-19
+Topic: Repeating meetings, meeting chat, Soniox call recording (transcripts)
+       and live translation in calls
+App: Zeno TeamSuite (frontend Next.js + backend FastAPI + LiveKit + Soniox)
+================================================================================
+
+1. Meetings can repeat (every day, weekday, week, 2 weeks or month) until a
+   chosen date, for up to one year.
+2. Every meeting has its own chat.
+3. In a video call (meeting or project), Record transcribes the call with
+   Soniox AI. When it stops, the transcript appears in the meeting's chat (or
+   the project chat for project calls).
+4. In a call, Translate shows live captions of what the others say,
+   translated into the language you pick.
+
+Note: "Record" saves a written transcript (who said what, as text). It does
+not save an audio or video file. Video recording would need a separate
+LiveKit Egress service on the server.
+
+
+--------------------------------------------------------------------------------
+1) REPEATING MEETINGS
+--------------------------------------------------------------------------------
+Page name : Calendar → Schedule meeting / Edit / meeting details
+Route     : /calendar
+Files:
+  - frontend/src/components/calendar/meeting-ui.tsx
+  - frontend/src/lib/meetings.ts
+  - backend/app/services/meetings.py, backend/app/schemas/meeting.py
+  - backend/app/migrations/versions/o9h3_meeting_series_chat.py   (DB migration)
+
+What changed:
+  - New meeting form: "Repeat" with Does not repeat / Every day / Every
+    weekday (Mon–Fri) / Every week / Every 2 weeks / Every month.
+  - When repeating, an "Until" date appears with quick buttons: 1 week,
+    1 month, 3 months, 6 months. The default is 1 month.
+  - Rules: the end date must be after the first meeting, and at most one year
+    away. At most 100 meetings are created per series.
+  - Monthly on the 29th–31st: in shorter months the meeting is on the last day.
+  - Times stay at the same local clock time, even across daylight saving.
+  - Each date is a normal meeting on the calendar, with its own call and chat.
+    A repeat icon shows next to the title, and the details say "Repeats every
+    week until Dec 29, 2026".
+  - Edit a repeating meeting: "Apply changes to" offers This meeting only /
+    This and following meetings / All meetings in the series. A new time
+    moves the other dates by the same amount.
+  - Cancel a repeating meeting: choose This one / This and following / All,
+    or "Keep" to back out.
+  - Invited people get ONE notification for the whole series ("Repeats every
+    week until …"), not one per date.
+  - The repeat pattern itself cannot be changed after creating. To change it,
+    cancel "All" and schedule again.
+
+
+--------------------------------------------------------------------------------
+2) MEETING CHAT
+--------------------------------------------------------------------------------
+Page name : Calendar → open a meeting → "Chat and transcripts" tab
+Route     : /calendar?meeting=<id>&tab=chat
+Files:
+  - frontend/src/components/calendar/meeting-chat.tsx              (NEW)
+  - backend/app/services/transcripts.py                            (NEW)
+
+What changed:
+  - The meeting dialog now has two tabs: Details, and Chat and transcripts.
+  - Only the organizer and invited people (and admins) can read and post.
+  - New messages notify the other meeting people (bell / desktop). Clicking
+    the notification opens the meeting on the chat tab.
+  - Refreshes every 10 seconds.
+
+
+--------------------------------------------------------------------------------
+3) RECORD A CALL (SONIOX TRANSCRIPT)
+--------------------------------------------------------------------------------
+Where     : inside any video call (meeting call or project call), top bar
+Files:
+  - frontend/src/components/chat/call-tools.tsx                    (NEW)
+  - frontend/src/lib/call-audio.ts                                 (NEW)
+  - frontend/src/components/chat/call-room.tsx, call-context.tsx
+  - frontend/src/lib/soniox-live.ts
+  - backend/app/api/transcripts.py                                 (NEW)
+
+What changed:
+  - "● Record" button in the call's top bar. Pressing it transcribes
+    everyone's voices (yours and the others') with Soniox AI. Speakers are
+    labelled "Speaker 1", "Speaker 2"… and mixed languages are detected.
+  - While recording, everyone in the call sees a red "Recording" badge (with
+    the recorder's name), and the minimized call shows a red dot.
+  - The button changes to "■ Stop recording · 3:12" with a timer.
+  - Only one person can record a call at a time. For the others, Record is
+    greyed out with "<name> is recording".
+  - The text is saved every 10 seconds. On Stop (or when the recorder leaves
+    the call) the transcript is finished, and:
+      • meeting call → it appears in the meeting's "Chat and transcripts"
+      • project call → it appears in that project's chat
+      • the others get a "Transcript of … is ready" notification
+  - A transcript card shows who recorded it, when, how long and the languages.
+    Click it to read the text, with Copy and Download .txt buttons.
+  - A recording cut off (tab closed, network lost) keeps the text saved so far
+    and is marked "(recording was cut off)".
+  - Delete: the recorder, the meeting organizer / project lead, or an admin.
+
+
+--------------------------------------------------------------------------------
+4) LIVE TRANSLATION IN CALLS
+--------------------------------------------------------------------------------
+Where     : inside any video call, top bar → "Translate" with a language list
+
+What changed:
+  - Choose a language (English, Hindi, Telugu, Tamil, Kannada, Malayalam,
+    Marathi, Bengali, Gujarati, Punjabi, Urdu, Spanish, French, German,
+    Arabic, Chinese, Japanese, and more), or Off.
+  - Captions appear at the bottom of the video: the translation in large
+    text, and what was originally said in small grey text.
+  - Each person picks their own language. It only affects their screen, and
+    the browser remembers the choice for next time.
+  - Only other people's voices are translated, not your own.
+
+
+--------------------------------------------------------------------------------
+SETUP / DEPLOY
+--------------------------------------------------------------------------------
+  - DB migration o9h3_meeting_series_chat runs automatically on deploy.
+  - New Python package: tzdata (time zones). It installs with the image build.
+  - Recording and translation use the existing SONIOX_API_KEY. If it is not
+    set, pressing Record / Translate shows an error.
+  - Soniox model default changed from stt-rt-v5 (retired by Soniox on
+    Dec 15, 2026) to stt-rt-v6.
+  - Each recording or translation is a separate Soniox stream, billed per
+    minute of audio by Soniox.
+
+
+--------------------------------------------------------------------------------
+TEST HINTS
+--------------------------------------------------------------------------------
+Repeating meetings
+  1. Schedule "Standup", Every weekday, Until "1 week" → about 5–6 meetings
+     appear, none on Saturday or Sunday.
+  2. Every month starting Jan 31 until April 30 → Jan 31, Feb 28, Mar 31,
+     Apr 30.
+  3. Until date before the start, or more than a year away → red message, and
+     Schedule is disabled.
+  4. Edit the 3rd date with "This meeting only" → only that date changes.
+     Edit with "This and following" and a 1 hour later start → the 3rd and
+     later dates move 1 hour; earlier dates stay.
+  5. Cancel "This and following" on the 4th date → dates 4 and later disappear.
+  6. The invited person gets exactly one notification for the series.
+
+Meeting chat
+  7. An invited person posts → the organizer sees it, plus a notification
+     that opens the chat tab.
+  8. Someone not invited cannot open the meeting or its chat.
+
+Recording (needs two people in a call, and Soniox configured)
+  9. Person A presses Record → both A and B see the red Recording badge.
+     B's Record button is greyed out.
+ 10. Speak in English and Hindi, then Stop → "Transcript saved to the
+     meeting chat". The card shows both languages, and the text has
+     Speaker 1 / Speaker 2.
+ 11. B gets a "Transcript of … is ready" notification.
+ 12. A closes the tab while recording → the transcript keeps the text up to
+     about 10 seconds before, and after 2 minutes shows "recording was cut
+     off". Someone else can now record.
+ 13. In a project call, Record → the transcript shows in the project chat.
+
+Translation
+ 14. B picks Hindi under Translate, and A speaks English → B sees Hindi
+     captions with the English underneath. A sees nothing (A's choice is Off).
+ 15. Choose Off → captions disappear.

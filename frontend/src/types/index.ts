@@ -541,6 +541,11 @@ export interface Meeting {
   attendees: Person[];
   project: { id: number; key: string; name: string } | null;
   created_at: string;
+  /** Shared by every date of a repeating meeting. */
+  series_id: string | null;
+  repeat: MeetingRepeat | null;
+  /** YYYY-MM-DD */
+  repeat_until: string | null;
 }
 
 /** Something that happened that the signed-in person should hear about. */
@@ -558,4 +563,30 @@ export interface AppNotification {
 export interface NotificationList {
   items: AppNotification[];
   unread: number;
+}
+
+export type MeetingRepeat = 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
+/** Which dates of a repeating meeting a change or cancellation applies to. */
+export type SeriesScope = 'one' | 'following' | 'all';
+
+export interface MeetingMessage {
+  id: number;
+  meeting_id: number;
+  body: string;
+  created_at: string;
+  user: Person;
+}
+
+/** A Soniox transcript of a meeting's or a project's call. */
+export interface CallTranscript {
+  id: number;
+  meeting_id: number | null;
+  project_id: number | null;
+  status: 'RECORDING' | 'DONE' | 'INTERRUPTED';
+  text: string;
+  languages: string[];
+  started_at: string;
+  updated_at: string;
+  ended_at: string | null;
+  user: Person;
 }
